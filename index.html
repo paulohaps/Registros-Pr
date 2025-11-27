@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registro PR's+ (Backup)</title>
+    <title>Registro PR's+ (Versão Final)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -253,7 +253,7 @@
             <button onClick={onClick} className={`px-6 py-2 rounded-full font-bold text-sm transition transform hover:scale-105 ${active ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow border hover:bg-gray-50'}`}>{label}</button>
         );
 
-        // --- MODAL DE CONFIGURAÇÕES (AGORA COM BACKUP) ---
+        // --- MODAL DE CONFIGURAÇÕES (AGORA COM BACKUP INTELIGENTE) ---
         function SettingsModal({ apiKey, setApiKey, onSave, onClose, logs, onImportSuccess }) {
             const fileInputRef = useRef(null);
 
@@ -273,6 +273,25 @@
                 fileInputRef.current.click();
             };
 
+            // --- FUNÇÃO DE HELPER PARA DESCOBRIR GRUPO MUSCULAR ---
+            const findMuscleGroup = (exerciseName) => {
+                for (const [group, exercises] of Object.entries(EXERCISE_CATALOG)) {
+                    // Verifica se o nome do exercício existe nas chaves do grupo
+                    if (exercises[exerciseName] || Object.keys(exercises).some(k => k.toLowerCase() === exerciseName.toLowerCase())) {
+                        return group;
+                    }
+                }
+                // Tenta busca parcial se não achar exato
+                for (const [group, exercises] of Object.entries(EXERCISE_CATALOG)) {
+                    for (const exKey of Object.keys(exercises)) {
+                        if (exerciseName.toLowerCase().includes(exKey.toLowerCase()) || exKey.toLowerCase().includes(exerciseName.toLowerCase())) {
+                            return group;
+                        }
+                    }
+                }
+                return "Outros";
+            };
+
             const handleFileChange = (event) => {
                 const file = event.target.files[0];
                 if (!file) return;
@@ -280,19 +299,57 @@
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     try {
-                        const importedLogs = JSON.parse(e.target.result);
-                        if (Array.isArray(importedLogs)) {
-                            if (confirm(`Encontrados ${importedLogs.length} registros no arquivo.\n\nISSO IRÁ SUBSTITUIR SEUS DADOS ATUAIS.\n\nDeseja continuar?`)) {
-                                StorageService.importLogs(importedLogs);
+                        const importedData = JSON.parse(e.target.result);
+                        let processedLogs = [];
+
+                        // CASO 1: Formato Nativo (Lista Plana)
+                        if (Array.isArray(importedData) && importedData.length > 0 && importedData[0].muscleGroup) {
+                            processedLogs = importedData;
+                        } 
+                        // CASO 2: Formato Externo (Agrupado por Data) - O SEU ARQUIVO
+                        else if (Array.isArray(importedData) && importedData.length > 0 && importedData[0].exercicios) {
+                            let idCounter = Date.now();
+                            
+                            importedData.forEach(day => {
+                                const date = day.data; // "2025-11-26"
+                                const [y, m, d] = date.split('-');
+                                const dateString = `${d}/${m}/${y}`;
+
+                                day.exercicios.forEach((ex, idx) => {
+                                    // Tenta mapear os nomes
+                                    const mappedExercise = ex.nome; // ex: "Rosca Alternada"
+                                    const mappedVariation = ex.descricao; // ex: "Halteres..."
+                                    const mappedGroup = findMuscleGroup(mappedExercise); // Infere o grupo
+
+                                    processedLogs.push({
+                                        id: idCounter - idx, // Gera ID único
+                                        muscleGroup: mappedGroup,
+                                        exercise: mappedExercise,
+                                        variation: mappedVariation,
+                                        weight: ex.carga_kg || 0,
+                                        reps: ex.repeticoes || 0,
+                                        workoutDate: date,
+                                        dateString: dateString,
+                                        createdAt: idCounter - idx
+                                    });
+                                });
+                                idCounter -= 100; // Evita colisão de IDs
+                            });
+                        }
+
+                        if (processedLogs.length > 0) {
+                            if (confirm(`Encontrados ${processedLogs.length} registros.\n\nDeseja substituir seus dados atuais por estes?`)) {
+                                StorageService.importLogs(processedLogs);
                                 onImportSuccess();
-                                alert("Dados restaurados com sucesso!");
+                                alert("Dados importados e convertidos com sucesso!");
                                 onClose();
                             }
                         } else {
-                            alert("Arquivo inválido. O formato deve ser JSON.");
+                            alert("Nenhum dado válido encontrado no arquivo.");
                         }
                     } catch (err) {
-                        alert("Erro ao ler o arquivo. Verifique se é um JSON válido.");
+                        console.error(err);
+                        alert("Erro ao processar arquivo. Verifique se é um JSON válido.");
                     }
                 };
                 reader.readAsText(file);
@@ -344,7 +401,7 @@
                             <div className="mt-4 bg-yellow-50 p-3 rounded-lg flex items-start">
                                 <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5 mr-2 flex-shrink-0"/>
                                 <p className="text-xs text-yellow-800">
-                                    Use o <strong>Exportar</strong> antes de limpar o cache do navegador ou trocar de dispositivo. O <strong>Restaurar</strong> substitui os dados atuais.
+                                    O sistema aceita backups nativos e arquivos JSON externos (conversão automática).
                                 </p>
                             </div>
                         </div>
