@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Registro PR's+ (IA Turbo)</title>
+    <title>Registro PR's+ (Versão Final)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -51,6 +51,7 @@
         import { Activity, BarChart2, Plus, Calendar, Trash2, ChevronDown, Trophy, Sparkles, Brain, X, Map, Zap, Settings, Download, Upload, Flame, LayoutGrid, Pencil, Utensils, ChefHat, HelpCircle, Info } from 'lucide-react';
 
         // --- CONSTANTES ---
+        // Voltamos para a chave que você confirmou que funciona
         const DEFAULT_API_KEY = "AIzaSyCZgPRLTn0OQZHB4rIj6bnWfrXTKRSWra0"; 
 
         // --- UTILITÁRIO DE DATA LOCAL ---
@@ -211,12 +212,14 @@
             useEffect(() => {
                 const storedKey = StorageService.getApiKey();
                 setLogs(StorageService.getLogs());
-                setApiKey(storedKey);
+                // Define a chave: se tiver no storage usa ela, se não, usa a DEFAULT
+                setApiKey(storedKey || DEFAULT_API_KEY);
             }, []);
 
             const handleSaveKey = () => {
                 StorageService.setApiKey(apiKey);
                 setShowSettings(false);
+                alert("Chave salva!");
             };
 
             const handleDelete = (timestamp) => {
@@ -232,15 +235,9 @@
 
             const refreshLogs = () => setLogs(StorageService.getLogs());
 
-            // Função helper para obter a chave válida (estado ou padrão)
-            const getValidKey = () => {
-                if (apiKey) return apiKey;
-                if (DEFAULT_API_KEY && DEFAULT_API_KEY !== "SEU_API_KEY_AQUI") {
-                    setApiKey(DEFAULT_API_KEY); // Sincroniza estado para futuro
-                    return DEFAULT_API_KEY;
-                }
-                alert("Chave API ausente ou inválida. Configure no código.");
-                return null;
+            // Função unificada para garantir que temos uma chave
+            const resolveApiKey = () => {
+                return apiKey || DEFAULT_API_KEY;
             };
 
             return (
@@ -272,13 +269,13 @@
 
                     <main className="max-w-4xl mx-auto p-4 flex-grow w-full">
                         {activeTab === 'log' ? (
-                            <LoggerSection onUpdateLogs={(newLogs) => setLogs(newLogs)} getValidKey={getValidKey} />
+                            <LoggerSection onUpdateLogs={(newLogs) => setLogs(newLogs)} apiKey={resolveApiKey()} />
                         ) : activeTab === 'planner' ? (
-                            <PlannerSection getValidKey={getValidKey} />
+                            <PlannerSection apiKey={resolveApiKey()} />
                         ) : activeTab === 'nutrition' ? (
-                            <NutritionSection getValidKey={getValidKey} />
+                            <NutritionSection apiKey={resolveApiKey()} />
                         ) : (
-                            <MetricsSection logs={logs} getValidKey={getValidKey} onDelete={handleDelete} onUpdate={handleUpdate} />
+                            <MetricsSection logs={logs} apiKey={resolveApiKey()} onDelete={handleDelete} onUpdate={handleUpdate} />
                         )}
                     </main>
 
@@ -354,6 +351,16 @@
                             <h3 className="text-xl font-bold flex items-center text-slate-800"><Settings className="w-5 h-5 mr-2"/> Configurações</h3>
                             <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><X className="w-5 h-5"/></button>
                         </div>
+                        
+                        <div className="mb-6">
+                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Chave da API Gemini</h4>
+                            <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Cole sua API Key aqui..." className="w-full p-3 border border-gray-200 rounded-xl mb-2 text-sm font-mono bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                            <p className="text-[10px] text-gray-400 mb-2">Deixe em branco para usar a chave padrão do sistema.</p>
+                            <button onClick={onSave} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm hover:bg-indigo-700 active:scale-95 transition">Salvar Preferência</button>
+                        </div>
+
+                        <hr className="border-gray-100 my-4" />
+
                         <div>
                             <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 tracking-wider">Gerenciar Dados</h4>
                             <div className="grid grid-cols-2 gap-3">
@@ -376,7 +383,7 @@
         }
 
         // --- DASHBOARD (METRICS) ---
-        function MetricsSection({ logs, getValidKey, onDelete, onUpdate }) {
+        function MetricsSection({ logs, apiKey, onDelete, onUpdate }) {
             const [view, setView] = useState('dashboard');
             const [analysis, setAnalysis] = useState('');
             const [loading, setLoading] = useState(false);
@@ -433,15 +440,15 @@
             }, [logs]);
 
             const analyze = async () => {
-                const key = getValidKey();
-                if(!key) return;
+                if(!apiKey) { alert("API Key ausente."); return; }
 
                 setLoading(true);
                 try {
                     const history = logs.slice(0, 30).map(l => `${l.dateString}: ${l.exercise} (${l.weight}kg x ${l.reps})`).join('\n');
                     const prompt = `Aja como um treinador. Analise este histórico de treino recente e me dê um feedback curto e motivador. Histórico:\n${history}`;
                     
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+                    // USANDO O MODELO QUE SABEMOS QUE FUNCIONA COM A SUA CHAVE
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                         method: 'POST', headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
                     });
@@ -452,9 +459,9 @@
                     }
                     
                     const data = await res.json();
-                    setAnalysis(data.candidates?.[0]?.content?.parts?.[0]?.text || "Erro na análise. Chave API pode estar inválida ou houve falha de rede.");
+                    setAnalysis(data.candidates?.[0]?.content?.parts?.[0]?.text || "Erro na análise. Sem resposta.");
                 } catch(e) { 
-                    setAnalysis(`Erro na IA: ${e.message}. Verifique a chave API.`); 
+                    setAnalysis(`Erro na IA: ${e.message}.`); 
                 }
                 setLoading(false);
             };
@@ -622,7 +629,7 @@
         }
 
         // --- LOGGER (REGISTRO) ---
-        function LoggerSection({ onUpdateLogs, getValidKey }) {
+        function LoggerSection({ onUpdateLogs, apiKey }) {
             const [date, setDate] = useState(getLocalTodayDate());
             const [group, setGroup] = useState('');
             const [type, setType] = useState('');
@@ -642,8 +649,7 @@
             }, [type]);
 
             const fetchTips = async () => {
-                const key = getValidKey();
-                if(!key) return;
+                if(!apiKey) { alert("API Key ausente."); return; }
                 
                 setShowTips(true);
                 if(tipContent) return; // Já carregou
@@ -651,7 +657,7 @@
                 setTipLoading(true);
                 try {
                     const prompt = `Explique de forma resumida e direta (em bullet points) a forma correta de executar o exercício: ${type} (${variation}). Dê 2 dicas de segurança.`;
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                         method: 'POST', headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
                     });
@@ -722,18 +728,17 @@
         }
 
         // --- PLANNER (IA) ---
-        function PlannerSection({ getValidKey }) {
+        function PlannerSection({ apiKey }) {
             const [goal, setGoal] = useState('');
             const [plan, setPlan] = useState('');
             const [loading, setLoading] = useState(false);
             const handlePlan = async (e) => {
                 e.preventDefault();
-                const key = getValidKey();
-                if(!key) return;
+                if(!apiKey) { alert("API Key ausente."); return; }
 
                 setLoading(true);
                 try {
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                         method: 'POST', headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ contents: [{ parts: [{ text: `Crie um treino detalhado (Markdown simples) baseado nisto: "${goal}". Seja direto.` }] }] })
                     });
@@ -771,20 +776,19 @@
         }
 
         // --- NUTRITION (IA) ---
-        function NutritionSection({ getValidKey }) {
+        function NutritionSection({ apiKey }) {
             const [query, setQuery] = useState('');
             const [response, setResponse] = useState('');
             const [loading, setLoading] = useState(false);
 
             const handleAskNutri = async (e) => {
                 e.preventDefault();
-                const key = getValidKey();
-                if(!key) return;
+                if(!apiKey) { alert("API Key ausente."); return; }
 
                 setLoading(true);
                 try {
                     const prompt = `Aja como um nutricionista esportivo. Responda a seguinte dúvida sobre alimentação de forma prática e saudável: "${query}". Use Markdown simples.`;
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                         method: 'POST', headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
                     });
