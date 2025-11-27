@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registro PR's+ (Pronto)</title>
+    <title>Registro PR's+ (Backup)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -41,9 +41,9 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useMemo } from 'react';
+        import React, { useState, useEffect, useMemo, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { Activity, Dumbbell, BarChart2, Plus, Calendar, Trash2, ChevronDown, ChevronUp, Trophy, Sparkles, Brain, X, Filter, Clock, Lightbulb, Map, Zap, Settings, Save, AlertTriangle, Flame, LayoutGrid, List, Pencil } from 'lucide-react';
+        import { Activity, Dumbbell, BarChart2, Plus, Calendar, Trash2, ChevronDown, ChevronUp, Trophy, Sparkles, Brain, X, Filter, Clock, Lightbulb, Map, Zap, Settings, Save, AlertTriangle, Flame, LayoutGrid, List, Pencil, Download, Upload, FileJson } from 'lucide-react';
 
         // --- CHAVE DA API PRÉ-CONFIGURADA ---
         const DEFAULT_API_KEY = "AIzaSyCaQxxmiVj9cDgeEGEXROj0GCgrJNRf768";
@@ -147,8 +147,13 @@
                 localStorage.setItem(StorageService.KEY_LOGS, JSON.stringify(newLogs));
                 return newLogs;
             },
+            // Função para importar dados brutos (substituir tudo)
+            importLogs: (newLogs) => {
+                if (!Array.isArray(newLogs)) return false;
+                localStorage.setItem(StorageService.KEY_LOGS, JSON.stringify(newLogs));
+                return true;
+            },
             getApiKey: () => {
-                // Tenta pegar do armazenamento, se não tiver, usa a padrão fornecida
                 return localStorage.getItem(StorageService.KEY_API) || DEFAULT_API_KEY;
             },
             setApiKey: (key) => localStorage.setItem(StorageService.KEY_API, key)
@@ -163,7 +168,6 @@
 
             useEffect(() => {
                 setLogs(StorageService.getLogs());
-                // Carrega a chave (que agora tem um padrão)
                 setApiKey(StorageService.getApiKey());
             }, []);
 
@@ -180,6 +184,11 @@
             const handleUpdate = (updatedLog) => {
                 const newLogs = StorageService.updateLog(updatedLog);
                 setLogs(newLogs.sort((a, b) => b.createdAt - a.createdAt));
+            };
+
+            // Função para recarregar logs após importação
+            const refreshLogs = () => {
+                setLogs(StorageService.getLogs());
             };
 
             return (
@@ -199,15 +208,14 @@
                     </header>
 
                     {showSettings && (
-                        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade">
-                            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
-                                <h3 className="text-xl font-bold mb-4">Configurar IA</h3>
-                                <p className="text-xs text-gray-500 mb-2">Chave atual carregada automaticamente.</p>
-                                <input type="text" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="API Key do Gemini" className="w-full p-3 border rounded-xl mb-4 text-sm font-mono" />
-                                <button onClick={handleSaveKey} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl">Salvar / Atualizar</button>
-                                <button onClick={() => setShowSettings(false)} className="w-full mt-2 py-3 text-gray-500">Fechar</button>
-                            </div>
-                        </div>
+                        <SettingsModal 
+                            apiKey={apiKey} 
+                            setApiKey={setApiKey} 
+                            onSave={handleSaveKey} 
+                            onClose={() => setShowSettings(false)}
+                            logs={logs}
+                            onImportSuccess={refreshLogs}
+                        />
                     )}
 
                     <main className="max-w-4xl mx-auto p-4">
@@ -244,6 +252,108 @@
         const DesktopBtn = ({ label, active, onClick }) => (
             <button onClick={onClick} className={`px-6 py-2 rounded-full font-bold text-sm transition transform hover:scale-105 ${active ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow border hover:bg-gray-50'}`}>{label}</button>
         );
+
+        // --- MODAL DE CONFIGURAÇÕES (AGORA COM BACKUP) ---
+        function SettingsModal({ apiKey, setApiKey, onSave, onClose, logs, onImportSuccess }) {
+            const fileInputRef = useRef(null);
+
+            const handleExport = () => {
+                const dataStr = JSON.stringify(logs, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `backup_pr_tracker_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const handleImportClick = () => {
+                fileInputRef.current.click();
+            };
+
+            const handleFileChange = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const importedLogs = JSON.parse(e.target.result);
+                        if (Array.isArray(importedLogs)) {
+                            if (confirm(`Encontrados ${importedLogs.length} registros no arquivo.\n\nISSO IRÁ SUBSTITUIR SEUS DADOS ATUAIS.\n\nDeseja continuar?`)) {
+                                StorageService.importLogs(importedLogs);
+                                onImportSuccess();
+                                alert("Dados restaurados com sucesso!");
+                                onClose();
+                            }
+                        } else {
+                            alert("Arquivo inválido. O formato deve ser JSON.");
+                        }
+                    } catch (err) {
+                        alert("Erro ao ler o arquivo. Verifique se é um JSON válido.");
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl overflow-y-auto max-h-[90vh]">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-bold flex items-center"><Settings className="w-5 h-5 mr-2"/> Configurações</h3>
+                            <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><X className="w-5 h-5"/></button>
+                        </div>
+                        
+                        {/* Seção IA */}
+                        <div className="mb-6">
+                            <h4 className="text-sm font-bold text-gray-500 uppercase mb-2">Inteligência Artificial</h4>
+                            <input type="text" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="API Key do Gemini" className="w-full p-3 border rounded-xl mb-2 text-sm font-mono bg-gray-50" />
+                            <button onClick={onSave} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm hover:bg-indigo-700">Salvar Chave</button>
+                        </div>
+
+                        <hr className="border-gray-200 my-4" />
+
+                        {/* Seção Backup */}
+                        <div>
+                            <h4 className="text-sm font-bold text-gray-500 uppercase mb-3">Backup & Dados</h4>
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={handleExport} className="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-indigo-300 transition group">
+                                    <Download className="w-6 h-6 text-indigo-500 mb-2 group-hover:scale-110 transition"/>
+                                    <span className="text-sm font-bold text-gray-700">Exportar</span>
+                                    <span className="text-[10px] text-gray-400">Salvar JSON</span>
+                                </button>
+
+                                <button onClick={handleImportClick} className="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-orange-300 transition group">
+                                    <Upload className="w-6 h-6 text-orange-500 mb-2 group-hover:scale-110 transition"/>
+                                    <span className="text-sm font-bold text-gray-700">Restaurar</span>
+                                    <span className="text-[10px] text-gray-400">Carregar JSON</span>
+                                </button>
+                                {/* Input invisível para upload */}
+                                <input 
+                                    type="file" 
+                                    accept=".json" 
+                                    ref={fileInputRef} 
+                                    style={{display: 'none'}} 
+                                    onChange={handleFileChange}
+                                />
+                            </div>
+
+                            <div className="mt-4 bg-yellow-50 p-3 rounded-lg flex items-start">
+                                <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5 mr-2 flex-shrink-0"/>
+                                <p className="text-xs text-yellow-800">
+                                    Use o <strong>Exportar</strong> antes de limpar o cache do navegador ou trocar de dispositivo. O <strong>Restaurar</strong> substitui os dados atuais.
+                                </p>
+                            </div>
+                        </div>
+
+                        <button onClick={onClose} className="w-full mt-6 py-3 text-gray-400 text-sm hover:text-gray-600">Fechar</button>
+                    </div>
+                </div>
+            );
+        }
 
         // --- DASHBOARD VISUAL (MÉTRICAS) ---
         function MetricsSection({ logs, apiKey, onDelete, onUpdate, onRequireKey }) {
