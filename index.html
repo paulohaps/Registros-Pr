@@ -2,29 +2,36 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registro PR's+ (Versão Final)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Registro PR's+ (Otimizado)</title>
     
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS (Com plugin de forms para melhor estilização) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Fonte Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
     
     <style>
-        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; background-color: #f3f4f6; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            -webkit-tap-highlight-color: transparent; 
+            background-color: #f3f4f6;
+            overscroll-behavior-y: none; /* Previne o "bounce" no mobile */
+        }
+        
+        /* Animações Suaves */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .animate-fade { animation: fadeIn 0.4s ease-out; }
         .animate-slide { animation: slideUp 0.4s ease-out; }
-        .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
         
+        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
     </style>
 
-    <!-- Import Map -->
+    <!-- Import Map para React e Lucide -->
     <script type="importmap">
     {
         "imports": {
@@ -34,6 +41,7 @@
         }
     }
     </script>
+    <!-- Babel para compilar JSX no navegador -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body class="text-gray-900 selection:bg-indigo-100">
@@ -45,85 +53,120 @@
         import { createRoot } from 'react-dom/client';
         import { Activity, Dumbbell, BarChart2, Plus, Calendar, Trash2, ChevronDown, ChevronUp, Trophy, Sparkles, Brain, X, Filter, Clock, Lightbulb, Map, Zap, Settings, Save, AlertTriangle, Flame, LayoutGrid, List, Pencil, Download, Upload, FileJson } from 'lucide-react';
 
-        // --- CHAVE DA API PRÉ-CONFIGURADA ---
-        const DEFAULT_API_KEY = "AIzaSyCaQxxmiVj9cDgeEGEXROj0GCgrJNRf768";
+        // --- CONSTANTES ---
+        const DEFAULT_API_KEY = "AIzaSyCaQxxmiVj9cDgeEGEXROj0GCgrJNRf768"; 
 
-        // --- CATÁLOGO COMPLETO ---
+        // --- UTILITÁRIO DE DATA LOCAL (Correção de Fuso Horário) ---
+        // Pega a data baseada no relógio do dispositivo do usuário, não em UTC.
+        const getLocalTodayDate = () => {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        // --- CATÁLOGO COMPLETO E GRANULAR ---
         const EXERCISE_CATALOG = {
             "Peitoral": {
-                "Supino": ["Reto (Barra)", "Reto (Halteres)", "Reto (Smith)", "Reto (Máquina)", "Reto (Articulado)", "Inclinado (Barra)", "Inclinado (Halteres)", "Inclinado (Smith)", "Inclinado (Máquina)", "Inclinado (Articulado)", "Declinado (Barra)", "Declinado (Halteres)", "Declinado (Máquina)"],
-                "Crucifixo": ["Reto (Halteres)", "Inclinado (Halteres)", "Declinado (Halteres)", "Máquina (Voador/Peck Deck)", "Inverso (Peck Deck)"],
-                "Crossover / Polia": ["Polia Alta (Para baixo)", "Polia Média (Meio peito)", "Polia Baixa (Para cima)"],
-                "Peso do Corpo": ["Flexão de Braço (Padrão)", "Flexão Diamante", "Flexão Declinada", "Paralelas (Foco Peito)"],
+                "Supino Reto": ["Barra Livre", "Halteres", "Smith", "Máquina Vertical", "Máquina Horizontal", "Articulado (Hammer)", "Chão (Floor Press)"],
+                "Supino Inclinado": ["Barra Livre", "Halteres", "Smith", "Máquina", "Articulado (Hammer)"],
+                "Supino Declinado": ["Barra Livre", "Halteres", "Smith", "Máquina", "Articulado"],
+                "Crucifixo": ["Reto (Halteres)", "Inclinado (Halteres)", "Declinado (Halteres)", "Máquina (Peck Deck)", "Polia Média (Em pé)", "Banco Reto (Polia)"],
+                "Crossover (Polia)": ["Polia Alta (Foco Inferior)", "Polia Baixa (Foco Superior)", "Polia Média"],
+                "Flexão de Braço": ["Padrão (Chão)", "Pés Elevados (Inclinada)", "Mãos Elevadas (Declinada)", "Diamante (Fechada)", "Aberta", "Com Peso"],
+                "Paralelas": ["Corpo Livre", "Máquina (Graviton)", "Com Peso Adicional"],
                 "Pullover": ["Halter", "Barra", "Corda (Polia)"]
             },
             "Costas": {
-                "Puxada (Polia Alta)": ["Frente (Aberta/Pronada)", "Frente (Fechada/Supinada)", "Frente (Triângulo/Neutra)", "Atrás (Nuca)", "Articulada"],
-                "Remada": ["Curvada (Barra Pronada)", "Curvada (Barra Supinada)", "Cavalinho (Barra T)", "Unilateral (Serrote)", "Baixa (Triângulo)", "Baixa (Corda)", "Máquina Fechada", "Máquina Aberta", "Apoiada no Banco"],
-                "Levantamento Terra": ["Convencional", "Sumô", "RDL (Romanian)", "Stiff", "Rack Pull"],
-                "Extensão de Tronco": ["Hiperextensão (Banco)", "Good Morning (Bom dia)"],
-                "Pulldown": ["Barra Reta", "Corda", "Triângulo"],
-                "Barra Fixa": ["Pronada (Aberta)", "Supinada (Fechada)", "Neutra", "Graviton (Assistida)"]
-            },
-            "Pernas (Quadríceps)": {
-                "Agachamento": ["Livre (Barra Costas)", "Frontal (Barra)", "Sumô", "Halter (Goblet)", "Smith", "Hack Machine", "V-Squat", "Pêndulo"],
-                "Leg Press": ["45 Graus", "Horizontal", "Vertical", "Unilateral"],
-                "Extensão de Joelho": ["Cadeira Extensora", "Extensora Unilateral"],
-                "Afundo / Avanço": ["Avanço (Passada)", "Afundo Estático (Halter)", "Afundo (Smith)", "Búlgaro"]
-            },
-            "Pernas (Posterior/Glúteo)": {
-                "Flexão de Joelho": ["Mesa Flexora", "Cadeira Flexora", "Flexora em Pé", "Nordic Hamstring"],
-                "Elevação Pélvica": ["Barra Livre", "Máquina", "Smith", "Unilateral"],
-                "Glúteo Isolado": ["Coice (Polia)", "Coice (Máquina)", "Abdução de Quadril (Cadeira)", "Caneleira (4 Apoios)"]
-            },
-            "Panturrilhas": {
-                "Em Pé": ["Máquina", "Smith", "Livre (Degrau)", "Burrinho"],
-                "Sentado": ["Banco (Sóleo)", "Leg Press"]
+                "Puxada Alta (Polia)": ["Frente (Pegada Aberta Pronada)", "Frente (Pegada Fechada Supinada)", "Triângulo (Neutra)", "Barra Romana (Neutra)", "Unilateral", "Articulada"],
+                "Remada Curvada": ["Barra (Pronada)", "Barra (Supinada)", "Halteres (Bilateral)", "Smith"],
+                "Remada Unilateral": ["Serrote (Halter)", "Kroc Rows", "Máquina Unilateral", "Polia Baixa"],
+                "Remada Baixa (Sentado)": ["Triângulo", "Barra Romana", "Barra Reta (Pronada)", "Barra Reta (Supinada)", "Corda"],
+                "Remada Máquina": ["Pegada Aberta (Pronada)", "Pegada Fechada (Neutra)", "Apoiada no Peito (Chest Supported)"],
+                "Remada Cavalinho": ["Barra Livre", "Máquina"],
+                "Levantamento Terra": ["Convencional", "Sumô", "Meio Terra (Rack Pull)", "Com Déficit"],
+                "Barra Fixa": ["Pronada (Pull-up)", "Supinada (Chin-up)", "Neutra", "Graviton (Assistida)"],
+                "Pulldown": ["Corda", "Barra Reta", "Triângulo"],
+                "Extensão Lombar": ["Banco (Hiperextensão)", "Máquina", "Good Morning (Bom dia)"]
             },
             "Ombros": {
-                "Desenvolvimento": ["Militar (Barra em pé)", "Sentado (Barra)", "Sentado (Halteres)", "Máquina", "Arnold Press", "Smith"],
-                "Elevação Lateral": ["Halteres", "Polia (Cabo)", "Máquina", "Sentado"],
+                "Desenvolvimento": ["Barra (Militar em Pé)", "Barra (Sentado)", "Halteres (Sentado)", "Halteres (Em Pé)", "Arnold Press", "Smith (Frente)", "Smith (Nuca)", "Máquina", "Articulado"],
+                "Elevação Lateral": ["Halteres (Em Pé)", "Halteres (Sentado)", "Polia (Cabo)", "Máquina", "Unilateral (Inclinado)"],
                 "Elevação Frontal": ["Halteres (Martelo)", "Halteres (Pronada)", "Barra", "Corda (Polia)", "Anilha"],
-                "Posterior de Ombro": ["Crucifixo Inverso (Halter)", "Voador Inverso (Máquina)", "Face Pull (Corda)"],
-                "Trapézio": ["Encolhimento (Halteres)", "Encolhimento (Barra)", "Encolhimento (Smith)", "Remada Alta"]
+                "Posterior de Ombro": ["Crucifixo Inverso (Halter)", "Voador Inverso (Máquina)", "Face Pull (Polia)", "Crucifixo Inverso (Polia)"],
+                "Remada Alta": ["Barra", "Polia", "Halteres"],
+                "Encolhimento (Trapézio)": ["Barra", "Halteres", "Smith", "Máquina"]
+            },
+            "Pernas: Quadríceps": {
+                "Agachamento": ["Livre (Barra Costas)", "Frontal (Barra)", "Sumô", "Halter (Goblet)", "Zercher", "Safety Bar"],
+                "Agachamento Máquina": ["Smith", "Hack Machine", "V-Squat", "Pêndulo", "Sissy Squat"],
+                "Leg Press": ["45 Graus", "Horizontal", "Vertical", "Unilateral"],
+                "Cadeira Extensora": ["Bilateral", "Unilateral"],
+                "Passada/Afundo": ["Avanço (Caminhando)", "Afundo Estático (Halter)", "Afundo (Smith)", "Agachamento Búlgaro", "Subida no Banco (Step-up)"]
+            },
+            "Pernas: Posteriores": {
+                "Mesa Flexora": ["Deitada (Bilateral)", "Deitada (Unilateral)"],
+                "Cadeira Flexora": ["Sentada (Bilateral)", "Sentada (Unilateral)"],
+                "Flexora em Pé": ["Máquina", "Caneleira"],
+                "Stiff": ["Barra", "Halteres", "Smith"],
+                "RDL (Romanian Deadlift)": ["Barra", "Halteres"],
+                "Nordic Hamstring": ["Peso do Corpo", "Assistido"]
+            },
+            "Pernas: Glúteos": {
+                "Elevação Pélvica": ["Barra Livre", "Máquina", "Smith", "Unilateral", "Halter"],
+                "Cadeira Abdutora": ["Tronco Reto", "Tronco Inclinado"],
+                "Glúteo Polia (Coice)": ["Perna Estendida", "Perna Flexionada"],
+                "Glúteo Máquina": ["Coice", "Vertical"],
+                "Caneleira": ["4 Apoios", "Em Pé"]
+            },
+            "Panturrilhas": {
+                "Em Pé": ["Máquina", "Smith", "Livre (Degrau/Halter)", "Unilateral"],
+                "Sentado": ["Banco (Gêmeos)", "Máquina", "No Leg Press"],
+                "Burrinho": ["Máquina", "Com Parceiro"]
             },
             "Tríceps": {
-                "Polia (Cabo)": ["Corda", "Barra Reta", "Barra V", "Unilateral (Inverso)"],
-                "Testa": ["Barra W", "Halteres", "Corda (Polia)"],
-                "Francês": ["Unilateral (Halter)", "Bilateral (Halter)", "Corda (Polia)"],
-                "Mergulho/Supino": ["Paralelas", "Banco", "Supino Fechado", "Máquina"],
+                "Tríceps Polia (Cabo)": ["Corda", "Barra Reta", "Barra V", "Barra W", "Unilateral (Pegada Inversa)"],
+                "Tríceps Testa": ["Barra W", "Halteres", "Barra H", "Corda (Polia)"],
+                "Tríceps Francês": ["Unilateral (Halter)", "Bilateral (Halter)", "Corda (Polia)", "Barra W (Sentado)"],
+                "Supino Fechado": ["Barra", "Smith"],
+                "Mergulho": ["Paralelas", "Banco", "Máquina (Graviton)"],
                 "Coice": ["Halter", "Polia"]
             },
             "Bíceps": {
                 "Rosca Direta": ["Barra Reta", "Barra W", "Polia Baixa"],
-                "Rosca Alternada": ["Halteres (Em pé)", "Halteres (Banco Inclinado)", "Giro de Punho"],
+                "Rosca Alternada": ["Halteres (Em pé)", "Halteres (Banco Inclinado 45º)", "Giro de Punho"],
                 "Rosca Martelo": ["Halteres", "Corda (Polia)", "Barra H"],
                 "Rosca Scott": ["Barra W", "Máquina", "Unilateral (Halter)"],
-                "Rosca Concentrada": ["Halter"]
+                "Rosca Concentrada": ["Halter", "Polia"],
+                "Rosca Aranha": ["Barra W", "Halteres"],
+                "Rosca 21": ["Barra W", "Barra Reta"]
             },
             "Antebraço": {
-                "Flexão de Punho": ["Barra", "Halter"],
-                "Extensão de Punho": ["Barra", "Halter"],
-                "Rosca Inversa": ["Barra", "Polia"]
+                "Flexão de Punho": ["Barra", "Halter", "Polia"],
+                "Extensão de Punho": ["Barra", "Halter", "Polia"],
+                "Rosca Inversa": ["Barra W", "Barra Reta", "Polia"]
             },
             "Abdômen / Core": {
-                "Reto Abdominal": ["Supra (Chão)", "Supra (Máquina)", "Crunch (Polia/Corda)", "Declined Bench"],
+                "Reto Abdominal": ["Supra (Chão)", "Supra (Máquina)", "Crunch (Polia/Corda)", "Banco Declinado"],
                 "Infra": ["Elevação de Pernas (Chão)", "Elevação de Pernas (Barra)", "Tesoura"],
-                "Isometria": ["Prancha Frontal", "Prancha Lateral", "Stomach Vacuum"],
-                "Oblíquos": ["Russo (Russian Twist)", "Flexão Lateral de Tronco"]
+                "Oblíquos": ["Giro Russo (Russian Twist)", "Flexão Lateral de Tronco (Halter)", "Lenhador (Polia)"],
+                "Isometria": ["Prancha Frontal", "Prancha Lateral", "Stomach Vacuum", "Roda Abdominal"]
             },
             "Cardio": {
-                "Máquinas": ["Esteira", "Bike Ergométrica", "Elíptico", "Escada", "Remo Indoor"],
-                "Livre": ["Pular Corda", "Corrida", "Caminhada"]
+                "Máquinas": ["Esteira (Caminhada)", "Esteira (Corrida)", "Bike Ergométrica", "Bike Spinning", "Elíptico", "Escada (Simulador)", "Remo Indoor"],
+                "Livre": ["Pular Corda", "Corrida na Rua", "Caminhada", "Polichinelos", "Burpees"]
             }
         };
 
         const StorageService = {
-            KEY_LOGS: 'registro_prs_logs',
+            KEY_LOGS: 'registro_prs_logs_v2',
             KEY_API: 'registro_prs_api_key',
             getLogs: () => {
-                const data = localStorage.getItem(StorageService.KEY_LOGS);
-                return data ? JSON.parse(data).sort((a, b) => b.createdAt - a.createdAt) : [];
+                try {
+                    const data = localStorage.getItem(StorageService.KEY_LOGS);
+                    return data ? JSON.parse(data).sort((a, b) => b.createdAt - a.createdAt) : [];
+                } catch (e) { console.error("Erro ao ler logs", e); return []; }
             },
             saveLog: (log) => {
                 const logs = StorageService.getLogs();
@@ -147,15 +190,12 @@
                 localStorage.setItem(StorageService.KEY_LOGS, JSON.stringify(newLogs));
                 return newLogs;
             },
-            // Função para importar dados brutos (substituir tudo)
             importLogs: (newLogs) => {
                 if (!Array.isArray(newLogs)) return false;
                 localStorage.setItem(StorageService.KEY_LOGS, JSON.stringify(newLogs));
                 return true;
             },
-            getApiKey: () => {
-                return localStorage.getItem(StorageService.KEY_API) || DEFAULT_API_KEY;
-            },
+            getApiKey: () => localStorage.getItem(StorageService.KEY_API) || DEFAULT_API_KEY,
             setApiKey: (key) => localStorage.setItem(StorageService.KEY_API, key)
         };
 
@@ -174,11 +214,12 @@
             const handleSaveKey = () => {
                 StorageService.setApiKey(apiKey);
                 setShowSettings(false);
-                alert("Configuração Salva!");
             };
 
             const handleDelete = (timestamp) => {
-                if(confirm("Apagar este registro?")) setLogs(StorageService.deleteLog(timestamp));
+                if(confirm("Tem certeza que deseja apagar este registro?")) {
+                    setLogs(StorageService.deleteLog(timestamp));
+                }
             };
 
             const handleUpdate = (updatedLog) => {
@@ -186,14 +227,21 @@
                 setLogs(newLogs.sort((a, b) => b.createdAt - a.createdAt));
             };
 
-            // Função para recarregar logs após importação
-            const refreshLogs = () => {
-                setLogs(StorageService.getLogs());
+            const refreshLogs = () => setLogs(StorageService.getLogs());
+
+            const checkKey = () => {
+                if(apiKey) return true;
+                if(!apiKey && DEFAULT_API_KEY) {
+                    setApiKey(DEFAULT_API_KEY);
+                    return true;
+                }
+                setShowSettings(true);
+                return false;
             };
 
             return (
-                <div className="min-h-screen pb-24 md:pb-0 font-sans text-gray-800 bg-gray-100">
-                    <header className="bg-slate-900 text-white p-4 shadow-lg sticky top-0 z-30">
+                <div className="min-h-screen pb-24 md:pb-0 font-sans text-gray-800 bg-gray-100 flex flex-col">
+                    <header className="bg-slate-900 text-white p-4 shadow-lg sticky top-0 z-30 pt-[env(safe-area-inset-top)]">
                         <div className="max-w-4xl mx-auto flex justify-between items-center">
                             <div className="flex items-center space-x-2">
                                 <div className="bg-indigo-500 p-1.5 rounded-lg shadow-lg shadow-indigo-500/30">
@@ -201,7 +249,7 @@
                                 </div>
                                 <h1 className="text-lg font-black tracking-tight italic">REGISTRO <span className="text-indigo-400">PR's+</span></h1>
                             </div>
-                            <button onClick={() => setShowSettings(true)} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition">
+                            <button onClick={() => setShowSettings(true)} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition active:scale-95">
                                 <Settings className="w-5 h-5" />
                             </button>
                         </div>
@@ -218,23 +266,23 @@
                         />
                     )}
 
-                    <main className="max-w-4xl mx-auto p-4">
+                    <main className="max-w-4xl mx-auto p-4 flex-grow w-full">
                         {activeTab === 'log' ? (
-                            <LoggerSection onUpdateLogs={(newLogs) => setLogs(newLogs)} apiKey={apiKey} onRequireKey={() => setShowSettings(true)} />
+                            <LoggerSection onUpdateLogs={(newLogs) => setLogs(newLogs)} apiKey={apiKey} onRequireKey={checkKey} />
                         ) : activeTab === 'planner' ? (
-                            <PlannerSection apiKey={apiKey} onRequireKey={() => setShowSettings(true)} />
+                            <PlannerSection apiKey={apiKey} onRequireKey={checkKey} />
                         ) : (
-                            <MetricsSection logs={logs} apiKey={apiKey} onDelete={handleDelete} onUpdate={handleUpdate} onRequireKey={() => setShowSettings(true)} />
+                            <MetricsSection logs={logs} apiKey={apiKey} onDelete={handleDelete} onUpdate={handleUpdate} onRequireKey={checkKey} />
                         )}
                     </main>
 
-                    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around p-2 pb-safe-bottom md:hidden shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-20">
+                    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around p-2 pb-[env(safe-area-inset-bottom)] md:hidden shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-20">
                         <NavBtn icon={BarChart2} label="Dashboard" active={activeTab === 'metrics'} onClick={() => setActiveTab('metrics')} />
                         <NavBtn icon={Plus} label="Registrar" active={activeTab === 'log'} onClick={() => setActiveTab('log')} />
                         <NavBtn icon={Map} label="Planejar" active={activeTab === 'planner'} onClick={() => setActiveTab('planner')} />
                     </nav>
 
-                    <div className="hidden md:flex justify-center mt-6 space-x-4">
+                    <div className="hidden md:flex justify-center mt-6 space-x-4 mb-10">
                         <DesktopBtn label="Dashboard Visual" active={activeTab === 'metrics'} onClick={() => setActiveTab('metrics')} />
                         <DesktopBtn label="Registrar PR" active={activeTab === 'log'} onClick={() => setActiveTab('log')} />
                         <DesktopBtn label="Planejador IA" active={activeTab === 'planner'} onClick={() => setActiveTab('planner')} />
@@ -244,7 +292,7 @@
         }
 
         const NavBtn = ({ icon: Icon, label, active, onClick }) => (
-            <button onClick={onClick} className={`flex flex-col items-center p-2 rounded-xl transition ${active ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400 hover:text-gray-600'}`}>
+            <button onClick={onClick} className={`flex flex-col items-center p-2 rounded-xl transition w-full ${active ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400 hover:text-gray-600'}`}>
                 <Icon className={`w-6 h-6 mb-1 ${active ? 'fill-current' : ''}`} strokeWidth={active ? 2.5 : 2} />
                 <span className="text-[10px] font-bold">{label}</span>
             </button>
@@ -253,7 +301,7 @@
             <button onClick={onClick} className={`px-6 py-2 rounded-full font-bold text-sm transition transform hover:scale-105 ${active ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow border hover:bg-gray-50'}`}>{label}</button>
         );
 
-        // --- MODAL DE CONFIGURAÇÕES (AGORA COM BACKUP INTELIGENTE) ---
+        // --- MODAL DE CONFIGURAÇÕES ---
         function SettingsModal({ apiKey, setApiKey, onSave, onClose, logs, onImportSuccess }) {
             const fileInputRef = useRef(null);
 
@@ -263,169 +311,78 @@
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = `backup_pr_tracker_${new Date().toISOString().split('T')[0]}.json`;
+                link.download = `backup_pr_tracker_${getLocalTodayDate()}.json`;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
             };
 
-            const handleImportClick = () => {
-                fileInputRef.current.click();
-            };
-
-            // --- FUNÇÃO DE HELPER PARA DESCOBRIR GRUPO MUSCULAR ---
-            const findMuscleGroup = (exerciseName) => {
-                for (const [group, exercises] of Object.entries(EXERCISE_CATALOG)) {
-                    // Verifica se o nome do exercício existe nas chaves do grupo
-                    if (exercises[exerciseName] || Object.keys(exercises).some(k => k.toLowerCase() === exerciseName.toLowerCase())) {
-                        return group;
-                    }
-                }
-                // Tenta busca parcial se não achar exato
-                for (const [group, exercises] of Object.entries(EXERCISE_CATALOG)) {
-                    for (const exKey of Object.keys(exercises)) {
-                        if (exerciseName.toLowerCase().includes(exKey.toLowerCase()) || exKey.toLowerCase().includes(exerciseName.toLowerCase())) {
-                            return group;
-                        }
-                    }
-                }
-                return "Outros";
-            };
-
             const handleFileChange = (event) => {
                 const file = event.target.files[0];
                 if (!file) return;
-
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     try {
-                        const importedData = JSON.parse(e.target.result);
-                        let processedLogs = [];
-
-                        // CASO 1: Formato Nativo (Lista Plana)
-                        if (Array.isArray(importedData) && importedData.length > 0 && importedData[0].muscleGroup) {
-                            processedLogs = importedData;
-                        } 
-                        // CASO 2: Formato Externo (Agrupado por Data) - O SEU ARQUIVO
-                        else if (Array.isArray(importedData) && importedData.length > 0 && importedData[0].exercicios) {
-                            let idCounter = Date.now();
-                            
-                            importedData.forEach(day => {
-                                const date = day.data; // "2025-11-26"
-                                const [y, m, d] = date.split('-');
-                                const dateString = `${d}/${m}/${y}`;
-
-                                day.exercicios.forEach((ex, idx) => {
-                                    // Tenta mapear os nomes
-                                    const mappedExercise = ex.nome; // ex: "Rosca Alternada"
-                                    const mappedVariation = ex.descricao; // ex: "Halteres..."
-                                    const mappedGroup = findMuscleGroup(mappedExercise); // Infere o grupo
-
-                                    processedLogs.push({
-                                        id: idCounter - idx, // Gera ID único
-                                        muscleGroup: mappedGroup,
-                                        exercise: mappedExercise,
-                                        variation: mappedVariation,
-                                        weight: ex.carga_kg || 0,
-                                        reps: ex.repeticoes || 0,
-                                        workoutDate: date,
-                                        dateString: dateString,
-                                        createdAt: idCounter - idx
-                                    });
-                                });
-                                idCounter -= 100; // Evita colisão de IDs
-                            });
-                        }
-
-                        if (processedLogs.length > 0) {
-                            if (confirm(`Encontrados ${processedLogs.length} registros.\n\nDeseja substituir seus dados atuais por estes?`)) {
-                                StorageService.importLogs(processedLogs);
+                        const importedLogs = JSON.parse(e.target.result);
+                        if (Array.isArray(importedLogs)) {
+                            if (confirm(`Encontrados ${importedLogs.length} registros.\n\nISSO SUBSTITUIRÁ SEUS DADOS ATUAIS.\n\nDeseja continuar?`)) {
+                                StorageService.importLogs(importedLogs);
                                 onImportSuccess();
-                                alert("Dados importados e convertidos com sucesso!");
+                                alert("Dados restaurados com sucesso!");
                                 onClose();
                             }
                         } else {
-                            alert("Nenhum dado válido encontrado no arquivo.");
+                            alert("Arquivo JSON inválido.");
                         }
-                    } catch (err) {
-                        console.error(err);
-                        alert("Erro ao processar arquivo. Verifique se é um JSON válido.");
-                    }
+                    } catch (err) { alert("Erro ao ler arquivo."); }
                 };
                 reader.readAsText(file);
             };
 
             return (
-                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade">
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade backdrop-blur-sm">
                     <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl overflow-y-auto max-h-[90vh]">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold flex items-center"><Settings className="w-5 h-5 mr-2"/> Configurações</h3>
+                            <h3 className="text-xl font-bold flex items-center text-slate-800"><Settings className="w-5 h-5 mr-2"/> Configurações</h3>
                             <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><X className="w-5 h-5"/></button>
                         </div>
-                        
-                        {/* Seção IA */}
-                        <div className="mb-6">
-                            <h4 className="text-sm font-bold text-gray-500 uppercase mb-2">Inteligência Artificial</h4>
-                            <input type="text" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="API Key do Gemini" className="w-full p-3 border rounded-xl mb-2 text-sm font-mono bg-gray-50" />
-                            <button onClick={onSave} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm hover:bg-indigo-700">Salvar Chave</button>
-                        </div>
-
-                        <hr className="border-gray-200 my-4" />
-
-                        {/* Seção Backup */}
                         <div>
-                            <h4 className="text-sm font-bold text-gray-500 uppercase mb-3">Backup & Dados</h4>
-                            
+                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 tracking-wider">Gerenciar Dados</h4>
                             <div className="grid grid-cols-2 gap-3">
-                                <button onClick={handleExport} className="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-indigo-300 transition group">
+                                <button onClick={handleExport} className="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-indigo-300 transition group bg-white">
                                     <Download className="w-6 h-6 text-indigo-500 mb-2 group-hover:scale-110 transition"/>
                                     <span className="text-sm font-bold text-gray-700">Exportar</span>
-                                    <span className="text-[10px] text-gray-400">Salvar JSON</span>
+                                    <span className="text-[10px] text-gray-400">Backup JSON</span>
                                 </button>
-
-                                <button onClick={handleImportClick} className="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-orange-300 transition group">
+                                <button onClick={() => fileInputRef.current.click()} className="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-orange-300 transition group bg-white">
                                     <Upload className="w-6 h-6 text-orange-500 mb-2 group-hover:scale-110 transition"/>
                                     <span className="text-sm font-bold text-gray-700">Restaurar</span>
-                                    <span className="text-[10px] text-gray-400">Carregar JSON</span>
+                                    <span className="text-[10px] text-gray-400">Ler JSON</span>
                                 </button>
-                                {/* Input invisível para upload */}
-                                <input 
-                                    type="file" 
-                                    accept=".json" 
-                                    ref={fileInputRef} 
-                                    style={{display: 'none'}} 
-                                    onChange={handleFileChange}
-                                />
-                            </div>
-
-                            <div className="mt-4 bg-yellow-50 p-3 rounded-lg flex items-start">
-                                <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5 mr-2 flex-shrink-0"/>
-                                <p className="text-xs text-yellow-800">
-                                    O sistema aceita backups nativos e arquivos JSON externos (conversão automática).
-                                </p>
+                                <input type="file" accept=".json" ref={fileInputRef} style={{display: 'none'}} onChange={handleFileChange} />
                             </div>
                         </div>
-
-                        <button onClick={onClose} className="w-full mt-6 py-3 text-gray-400 text-sm hover:text-gray-600">Fechar</button>
                     </div>
                 </div>
             );
         }
 
-        // --- DASHBOARD VISUAL (MÉTRICAS) ---
+        // --- DASHBOARD (METRICS) ---
         function MetricsSection({ logs, apiKey, onDelete, onUpdate, onRequireKey }) {
             const [view, setView] = useState('dashboard');
             const [analysis, setAnalysis] = useState('');
             const [loading, setLoading] = useState(false);
             const [editingLog, setEditingLog] = useState(null);
 
-            // 1. Heatmap Data
             const heatmapData = useMemo(() => {
                 const days = [];
                 const today = new Date();
+                // Fuso horário corrigido para heatmap
+                const offset = today.getTimezoneOffset() * 60000;
+                
                 for (let i = 27; i >= 0; i--) {
-                    const d = new Date();
-                    d.setDate(today.getDate() - i);
+                    const d = new Date(today.getTime() - (i * 86400000) - offset);
+                    // Formatação manual para garantir data local
                     const dateStr = d.toISOString().split('T')[0];
                     const count = logs.filter(l => l.workoutDate === dateStr).length;
                     days.push({ date: dateStr, count, dayNum: d.getDate() });
@@ -433,7 +390,6 @@
                 return days;
             }, [logs]);
 
-            // 2. Muscle Distribution
             const muscleStats = useMemo(() => {
                 const stats = {};
                 let total = 0;
@@ -446,7 +402,6 @@
                     .sort((a,b) => b.count - a.count);
             }, [logs]);
 
-            // 3. PR Calculation
             const prs = useMemo(() => {
                 const map = {};
                 logs.forEach(l => {
@@ -455,10 +410,9 @@
                          map[key] = { maxW: l.weight, maxR: l.reps, date: l.dateString, group: l.muscleGroup }; 
                     }
                 });
-                return Object.entries(map);
+                return Object.entries(map).slice(0, 6);
             }, [logs]);
 
-            // 4. Grouped History
             const groupedHistory = useMemo(() => {
                 const groups = {};
                 logs.forEach(l => {
@@ -473,18 +427,20 @@
             }, [logs]);
 
             const analyze = async () => {
-                if(!apiKey) return onRequireKey();
+                const keyToUse = apiKey || DEFAULT_API_KEY;
+                if(!keyToUse) return onRequireKey();
                 setLoading(true);
                 try {
-                    const history = logs.slice(0, 20).map(l => `${l.dateString}: ${l.exercise} (${l.weight}kg)`).join('\n');
-                    const prompt = `Analise este histórico (Markdown): \n${history}\n Dê 1 elogio e 1 dica.`;
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    const history = logs.slice(0, 30).map(l => `${l.dateString}: ${l.exercise} (${l.weight}kg x ${l.reps})`).join('\n');
+                    const prompt = `Aja como um treinador. Analise este histórico de treino recente e me dê um feedback curto e motivador. Histórico:\n${history}`;
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${keyToUse}`, {
                         method: 'POST', headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
                     });
+                    if (!res.ok) throw new Error("Falha na API");
                     const data = await res.json();
-                    setAnalysis(data.candidates?.[0]?.content?.parts?.[0]?.text);
-                } catch(e) { alert("Erro na IA. Verifique a chave ou conexão."); }
+                    setAnalysis(data.candidates?.[0]?.content?.parts?.[0]?.text || "Erro na análise.");
+                } catch(e) { alert("Erro na IA."); }
                 setLoading(false);
             };
 
@@ -492,13 +448,13 @@
                 <div className="animate-slide space-y-6">
                     <div className="flex bg-gray-200 p-1 rounded-xl">
                         <button onClick={() => setView('dashboard')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${view==='dashboard'?'bg-white shadow text-indigo-600':'text-gray-500'}`}>Visão Geral</button>
-                        <button onClick={() => setView('history')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${view==='history'?'bg-white shadow text-indigo-600':'text-gray-500'}`}>Histórico Detalhado</button>
+                        <button onClick={() => setView('history')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${view==='history'?'bg-white shadow text-indigo-600':'text-gray-500'}`}>Histórico</button>
                     </div>
 
                     {view === 'dashboard' ? (
                         <>
                             <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
-                                <h3 className="font-bold text-gray-800 mb-4 flex items-center"><Flame className="w-5 h-5 mr-2 text-orange-500" fill="currentColor"/> Frequência (30 dias)</h3>
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center text-sm uppercase tracking-wider"><Flame className="w-4 h-4 mr-2 text-orange-500" fill="currentColor"/> Constância (30 dias)</h3>
                                 <div className="grid grid-cols-7 gap-2">
                                     {heatmapData.map((d, i) => (
                                         <div key={i} className={`aspect-square rounded-md flex items-center justify-center text-[10px] font-bold transition-all hover:scale-110 ${d.count > 0 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-gray-100 text-gray-300'}`}>
@@ -506,13 +462,25 @@
                                         </div>
                                     ))}
                                 </div>
-                                <p className="text-center text-xs text-gray-400 mt-3">Quanto mais cor, mais treino!</p>
                             </div>
-
+                            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-3xl p-5 text-white shadow-lg relative overflow-hidden">
+                                <Brain className="absolute right-0 top-0 w-24 h-24 text-white opacity-10 -mr-6 -mt-6"/>
+                                <div className="relative z-10">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h3 className="font-bold flex items-center"><Sparkles className="w-4 h-4 mr-2 text-yellow-300"/> Coach IA</h3>
+                                        <button onClick={analyze} disabled={loading} className="text-[10px] bg-white/20 px-3 py-1.5 rounded-full hover:bg-white/30 font-bold transition disabled:opacity-50">
+                                            {loading ? "Pensando..." : "Analisar Progresso"}
+                                        </button>
+                                    </div>
+                                    <div className="bg-black/20 p-3 rounded-xl min-h-[60px]">
+                                        {analysis ? <div className="text-xs whitespace-pre-wrap leading-relaxed">{analysis}</div> : <p className="text-xs opacity-70 italic">Toque em analisar para receber feedback.</p>}
+                                    </div>
+                                </div>
+                            </div>
                             <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
-                                <h3 className="font-bold text-gray-800 mb-4 flex items-center"><LayoutGrid className="w-5 h-5 mr-2 text-indigo-500"/> Foco Muscular</h3>
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center text-sm uppercase tracking-wider"><LayoutGrid className="w-4 h-4 mr-2 text-indigo-500"/> Foco Muscular</h3>
                                 <div className="space-y-3">
-                                    {muscleStats.map((s) => (
+                                    {muscleStats.slice(0, 5).map((s) => (
                                         <div key={s.name}>
                                             <div className="flex justify-between text-xs font-bold mb-1">
                                                 <span className="text-gray-700">{s.name}</span>
@@ -523,33 +491,21 @@
                                             </div>
                                         </div>
                                     ))}
-                                    {muscleStats.length === 0 && <p className="text-center text-xs text-gray-400">Nenhum dado.</p>}
+                                    {muscleStats.length === 0 && <p className="text-center text-xs text-gray-400">Nenhum dado registrado.</p>}
                                 </div>
                             </div>
-
-                            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-3xl p-5 text-white shadow-lg relative overflow-hidden">
-                                <Brain className="absolute right-0 top-0 w-24 h-24 text-white opacity-10 -mr-6 -mt-6"/>
-                                <div className="relative z-10">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h3 className="font-bold flex items-center"><Sparkles className="w-4 h-4 mr-2 text-yellow-300"/> Análise IA</h3>
-                                        <button onClick={analyze} disabled={loading} className="text-[10px] bg-white/20 px-3 py-1 rounded-full hover:bg-white/30 font-bold">{loading ? "..." : "Gerar"}</button>
-                                    </div>
-                                    {analysis ? <div className="text-xs bg-black/20 p-3 rounded-xl whitespace-pre-wrap">{analysis}</div> : <p className="text-xs opacity-80">Descubra padrões ocultos no seu treino.</p>}
-                                </div>
-                            </div>
-
                             <div>
-                                <h3 className="font-bold text-gray-800 mb-3 ml-1">Seus Recordes</h3>
+                                <h3 className="font-bold text-gray-800 mb-3 ml-1 text-sm uppercase tracking-wider">Top Recordes</h3>
                                 <div className="grid grid-cols-2 gap-3">
                                     {prs.map(([name, data]) => (
-                                        <div key={name} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between">
+                                        <div key={name} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between hover:border-indigo-100 transition">
                                             <div>
-                                                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wide">{data.group}</span>
-                                                <h4 className="font-bold text-gray-800 text-sm leading-tight mt-1 mb-2">{name}</h4>
+                                                <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-wide bg-indigo-50 px-1.5 py-0.5 rounded">{data.group}</span>
+                                                <h4 className="font-bold text-gray-800 text-xs leading-tight mt-2 mb-2 line-clamp-2">{name}</h4>
                                             </div>
-                                            <div className="flex items-end justify-between">
-                                                <div className="text-2xl font-black text-gray-900">{data.maxW}<span className="text-xs font-normal text-gray-400 ml-0.5">kg</span></div>
-                                                <div className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">{data.maxR}reps</div>
+                                            <div className="flex items-end justify-between border-t border-gray-50 pt-2 mt-1">
+                                                <div className="text-xl font-black text-gray-900">{data.maxW}<span className="text-xs font-normal text-gray-400 ml-0.5">kg</span></div>
+                                                <div className="text-[10px] text-gray-400">{data.maxR} reps</div>
                                             </div>
                                         </div>
                                     ))}
@@ -557,128 +513,103 @@
                             </div>
                         </>
                     ) : (
-                        <div className="space-y-6 pb-10">
+                        <div className="space-y-8 pb-10">
                             {groupedHistory.map(([date, items]) => (
-                                <div key={date} className="relative pl-4 border-l-2 border-indigo-100">
+                                <div key={date} className="relative pl-6 border-l-2 border-indigo-100">
                                     <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-indigo-500 border-4 border-white shadow-sm"></div>
-                                    <h3 className="font-bold text-gray-800 mb-3 ml-2 text-lg">{date}</h3>
-                                    <div className="space-y-2">
+                                    <h3 className="font-bold text-gray-800 mb-4 text-lg">{date}</h3>
+                                    <div className="space-y-3">
                                         {items.map(log => (
-                                            <div key={log.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center group">
-                                                <div>
-                                                    <div className="font-bold text-gray-700 text-sm">{log.exercise} <span className="font-normal text-gray-400 text-xs">({log.variation})</span></div>
+                                            <div key={log.id} className="bg-white p-3.5 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center group active:scale-[0.99] transition">
+                                                <div className="flex-1 pr-2">
+                                                    <div className="font-bold text-gray-700 text-sm">{log.exercise}</div>
+                                                    <div className="text-xs text-gray-400">{log.variation}</div>
                                                 </div>
-                                                <div className="flex items-center space-x-2">
+                                                <div className="flex items-center space-x-3">
                                                     <div className="text-right">
-                                                        <span className="font-bold text-indigo-600">{log.weight}kg</span>
-                                                        <span className="text-xs text-gray-400 ml-1">x {log.reps}</span>
+                                                        <div className="font-bold text-indigo-600 text-base">{log.weight}kg</div>
+                                                        <div className="text-[10px] text-gray-400">{log.reps} reps</div>
                                                     </div>
-                                                    <button onClick={()=>setEditingLog(log)} className="p-1.5 text-blue-300 hover:text-blue-500 transition"><Pencil className="w-4 h-4"/></button>
-                                                    <button onClick={()=>onDelete(log.createdAt)} className="p-1.5 text-red-300 hover:text-red-500 transition"><Trash2 className="w-4 h-4"/></button>
+                                                    <div className="flex flex-col space-y-1">
+                                                        <button onClick={()=>setEditingLog(log)} className="p-1.5 bg-blue-50 text-blue-500 rounded-lg hover:bg-blue-100"><Pencil className="w-3 h-3"/></button>
+                                                        <button onClick={()=>onDelete(log.createdAt)} className="p-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"><Trash2 className="w-3 h-3"/></button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             ))}
-                            {groupedHistory.length === 0 && <div className="text-center text-gray-400 py-10">Histórico vazio.</div>}
+                            {groupedHistory.length === 0 && <div className="text-center text-gray-400 py-10 italic">Nenhum treino registrado ainda.</div>}
                         </div>
                     )}
-
-                    {/* EDIT MODAL */}
                     {editingLog && (
-                        <EditLogModal 
-                            log={editingLog} 
-                            onClose={() => setEditingLog(null)} 
-                            onSave={(updatedLog) => {
-                                onUpdate(updatedLog);
-                                setEditingLog(null);
-                            }} 
-                        />
+                        <EditLogModal log={editingLog} onClose={() => setEditingLog(null)} onSave={(updatedLog) => { onUpdate(updatedLog); setEditingLog(null); }} />
                     )}
                 </div>
             );
         }
 
-        // --- EDIT MODAL COMPONENT ---
+        // --- EDIT MODAL ---
         function EditLogModal({ log, onClose, onSave }) {
             const [weight, setWeight] = useState(log.weight);
             const [reps, setReps] = useState(log.reps);
             const [date, setDate] = useState(log.workoutDate);
-            
             const [group, setGroup] = useState(log.muscleGroup);
             const [type, setType] = useState(log.exercise);
             const [variation, setVariation] = useState(log.variation);
 
             useEffect(() => {
-                if (group && EXERCISE_CATALOG[group] && !EXERCISE_CATALOG[group][type]) {
-                    setType('');
-                    setVariation('');
-                }
+                if (group && EXERCISE_CATALOG[group] && !EXERCISE_CATALOG[group][type]) { setType(''); setVariation(''); }
             }, [group]);
-
             useEffect(() => {
-                 if (group && type && EXERCISE_CATALOG[group] && EXERCISE_CATALOG[group][type] && !EXERCISE_CATALOG[group][type].includes(variation)) {
-                     setVariation('');
-                 }
+                 if (group && type && EXERCISE_CATALOG[group] && EXERCISE_CATALOG[group][type] && !EXERCISE_CATALOG[group][type].includes(variation)) { setVariation(''); }
             }, [type]);
-
             const handleSave = () => {
                 const [y, m, d] = date.split('-');
                 onSave({
-                    ...log, 
-                    weight: parseFloat(weight),
-                    reps: parseInt(reps),
-                    workoutDate: date,
-                    dateString: `${d}/${m}/${y}`,
-                    muscleGroup: group,
-                    exercise: type,
-                    variation: variation
+                    ...log, weight: parseFloat(weight), reps: parseInt(reps), workoutDate: date, dateString: `${d}/${m}/${y}`, muscleGroup: group, exercise: type, variation: variation
                 });
             };
-
             return (
-                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade">
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade backdrop-blur-sm">
                     <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
-                        <h3 className="text-xl font-bold mb-4 flex items-center text-indigo-600"><Pencil className="w-5 h-5 mr-2"/> Editar Registro</h3>
-                        
-                        <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold flex items-center text-indigo-600"><Pencil className="w-5 h-5 mr-2"/> Editar</h3>
+                            <button onClick={onClose}><X className="w-5 h-5 text-gray-400"/></button>
+                        </div>
+                        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
                             <div>
                                 <label className="text-[10px] font-bold text-gray-400 uppercase">Data</label>
-                                <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="w-full bg-gray-50 p-2 rounded-lg font-bold outline-none"/>
+                                <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="w-full bg-gray-50 p-3 rounded-xl font-bold outline-none text-gray-700"/>
                             </div>
-                            
                             <Select label="Grupo" value={group} onChange={e=>setGroup(e.target.value)} options={Object.keys(EXERCISE_CATALOG)} />
                             {group && <Select label="Exercício" value={type} onChange={e=>setType(e.target.value)} options={Object.keys(EXERCISE_CATALOG[group]) || []} />}
-                            {type && group && (
+                            {type && group && EXERCISE_CATALOG[group][type] && (
                                 <div className="relative">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Variação</label>
-                                    <select value={variation} onChange={e=>setVariation(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold outline-none appearance-none">
+                                    <select value={variation} onChange={e=>setVariation(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold outline-none appearance-none text-sm text-gray-700">
                                         <option value="" disabled>Selecione...</option>
-                                        {EXERCISE_CATALOG[group][type]?.map(v=><option key={v} value={v}>{v}</option>)}
+                                        {EXERCISE_CATALOG[group][type].map(v=><option key={v} value={v}>{v}</option>)}
                                     </select>
                                     <ChevronDown className="absolute right-3 top-8 text-gray-400 w-4 h-4 pointer-events-none"/>
                                 </div>
                             )}
-
                             <div className="grid grid-cols-2 gap-3">
                                 <Input label="Carga (kg)" type="number" value={weight} onChange={e=>setWeight(e.target.value)} />
                                 <Input label="Reps" type="number" value={reps} onChange={e=>setReps(e.target.value)} />
                             </div>
                         </div>
-
-                        <div className="flex gap-3 mt-6">
-                            <button onClick={onClose} className="flex-1 py-3 bg-gray-100 font-bold rounded-xl text-gray-600">Cancelar</button>
-                            <button onClick={handleSave} className="flex-1 py-3 bg-indigo-600 font-bold rounded-xl text-white shadow-lg shadow-indigo-200">Salvar</button>
-                        </div>
+                        <button onClick={handleSave} className="w-full mt-6 py-3 bg-indigo-600 font-bold rounded-xl text-white shadow-lg shadow-indigo-200 active:scale-95 transition">Salvar Alterações</button>
                     </div>
                 </div>
             );
         }
 
-        // --- LOGGER & PLANNER ---
+        // --- LOGGER (REGISTRO) ---
         function LoggerSection({ onUpdateLogs, apiKey, onRequireKey }) {
-            const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+            // Inicializa com a data local correta
+            const [date, setDate] = useState(getLocalTodayDate());
             const [group, setGroup] = useState('');
             const [type, setType] = useState('');
             const [variation, setVariation] = useState('');
@@ -686,7 +617,11 @@
             const [reps, setReps] = useState('');
             
             useEffect(() => { setType(''); setVariation(''); }, [group]);
-            useEffect(() => { if(group && type) setVariation(EXERCISE_CATALOG[group][type][0] || ''); }, [type]);
+            useEffect(() => { 
+                if(group && type && EXERCISE_CATALOG[group][type]) {
+                    setVariation(EXERCISE_CATALOG[group][type][0] || '');
+                }
+            }, [type]);
 
             const handleSave = (e) => {
                 e.preventDefault();
@@ -696,7 +631,7 @@
                     workoutDate: date, dateString: `${d}/${m}/${y}`, createdAt: Date.now()
                 };
                 onUpdateLogs(StorageService.saveLog(log));
-                alert("Salvo!"); setWeight(''); setReps('');
+                setWeight(''); setReps('');
             };
 
             return (
@@ -704,59 +639,73 @@
                     <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center"><Plus className="w-5 h-5 mr-2 text-indigo-500"/> Novo Registro</h2>
                     <form onSubmit={handleSave} className="space-y-4">
                         <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase">Data</label>
-                            <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="w-full bg-transparent font-bold text-gray-800 outline-none"/>
+                            <label className="text-[10px] font-bold text-gray-400 uppercase">Data do Treino</label>
+                            <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="w-full bg-transparent font-bold text-gray-800 outline-none mt-1"/>
                         </div>
-                        <Select label="Grupo" value={group} onChange={e=>setGroup(e.target.value)} options={Object.keys(EXERCISE_CATALOG)} />
+                        <Select label="Grupo Muscular" value={group} onChange={e=>setGroup(e.target.value)} options={Object.keys(EXERCISE_CATALOG)} />
                         {group && <Select label="Exercício" value={type} onChange={e=>setType(e.target.value)} options={Object.keys(EXERCISE_CATALOG[group])} />}
                         {type && (
                              <div className="relative">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Variação</label>
-                                <select value={variation} onChange={e=>setVariation(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold outline-none appearance-none">
+                                <select value={variation} onChange={e=>setVariation(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold outline-none appearance-none text-gray-700 text-sm">
                                     {EXERCISE_CATALOG[group][type].map(v=><option key={v} value={v}>{v}</option>)}
                                 </select>
                                 <ChevronDown className="absolute right-3 top-8 text-gray-400 w-4 h-4 pointer-events-none"/>
                             </div>
                         )}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-3 pt-2">
                             <Input label="Carga (kg)" type="number" value={weight} onChange={e=>setWeight(e.target.value)} placeholder="0" />
                             <Input label="Reps" type="number" value={reps} onChange={e=>setReps(e.target.value)} placeholder="0" />
                         </div>
-                        <button disabled={!variation || !weight} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-200 disabled:opacity-50 active:scale-95 transition">SALVAR</button>
+                        <button disabled={!variation || !weight} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:shadow-none active:scale-95 transition mt-4">
+                            CONFIRMAR SÉRIE
+                        </button>
                     </form>
                 </div>
             );
         }
 
+        // --- PLANNER (IA) ---
         function PlannerSection({ apiKey, onRequireKey }) {
             const [goal, setGoal] = useState('');
             const [plan, setPlan] = useState('');
             const [loading, setLoading] = useState(false);
-
             const handlePlan = async (e) => {
                 e.preventDefault();
-                if(!apiKey) return onRequireKey();
+                const keyToUse = apiKey || DEFAULT_API_KEY;
+                if(!keyToUse) return onRequireKey();
                 setLoading(true);
                 try {
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${keyToUse}`, {
                         method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ contents: [{ parts: [{ text: `Treino: "${goal}". Formate Markdown simples.` }] }] })
+                        body: JSON.stringify({ contents: [{ parts: [{ text: `Crie um treino detalhado (Markdown simples) baseado nisto: "${goal}". Seja direto.` }] }] })
                     });
                     const data = await res.json();
                     setPlan(data.candidates?.[0]?.content?.parts?.[0]?.text);
                 } catch(e) { alert("Erro IA"); }
                 setLoading(false);
             };
-
             return (
                 <div className="animate-slide space-y-4">
                     <div className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
                         <Zap className="absolute right-0 top-0 w-32 h-32 opacity-10 -mr-6 -mt-6"/>
-                        <h2 className="text-xl font-bold mb-2 flex items-center"><Map className="w-5 h-5 mr-2"/> Planejador IA</h2>
-                        <textarea value={goal} onChange={e=>setGoal(e.target.value)} placeholder="Ex: Peito e Tríceps foco em força..." className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 outline-none h-24 text-sm"></textarea>
-                        <button onClick={handlePlan} disabled={loading} className="mt-3 w-full bg-white text-teal-700 font-bold py-2 rounded-lg text-sm">{loading ? "Criando..." : "Gerar Treino"}</button>
+                        <h2 className="text-xl font-bold mb-2 flex items-center relative z-10"><Map className="w-5 h-5 mr-2"/> Gerador de Treino</h2>
+                        <textarea value={goal} onChange={e=>setGoal(e.target.value)} placeholder="Ex: Peito e Tríceps foco em força, tenho apenas halteres..." className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/60 outline-none h-28 text-sm relative z-10"></textarea>
+                        <button onClick={handlePlan} disabled={loading} className="mt-3 w-full bg-white text-teal-700 font-bold py-3 rounded-xl text-sm shadow-lg relative z-10 hover:bg-teal-50 transition">
+                            {loading ? "Criando Estratégia..." : "Gerar Treino com IA"}
+                        </button>
                     </div>
-                    {plan && <div className="bg-white p-5 rounded-3xl shadow-sm prose prose-sm max-w-none animate-fade">{plan.split('\n').map((l,i) => <p key={i} className={l.startsWith('#')?'font-bold text-teal-700':''}>{l.replace(/[*#]/g,'')}</p>)}</div>}
+                    {plan && (
+                        <div className="bg-white p-6 rounded-3xl shadow-sm prose prose-sm max-w-none animate-fade border border-gray-100">
+                             <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+                                {plan.replace(/\*\*/g, '').split('\n').map((line, i) => (
+                                    <p key={i} className={`${line.startsWith('#') ? 'font-bold text-teal-700 text-lg mt-4 border-b border-gray-100 pb-1' : 'mb-2'}`}>
+                                        {line.replace(/^#+\s/, '')}
+                                    </p>
+                                ))}
+                             </div>
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -764,7 +713,7 @@
         const Select = ({ label, value, onChange, options }) => (
             <div className="relative">
                 <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">{label}</label>
-                <select value={value} onChange={onChange} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold outline-none appearance-none">
+                <select value={value} onChange={onChange} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold outline-none appearance-none text-gray-700 text-sm">
                     <option value="" disabled>Selecione...</option>
                     {options.sort().map(o=><option key={o} value={o}>{o}</option>)}
                 </select>
@@ -774,11 +723,12 @@
         const Input = ({ label, ...props }) => (
             <div>
                 <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">{label}</label>
-                <input {...props} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-center font-bold text-lg outline-none" />
+                <input {...props} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-center font-bold text-lg outline-none focus:ring-2 focus:ring-indigo-200 transition text-gray-800" />
             </div>
         );
 
-        createRoot(document.getElementById('root')).render(<App />);
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
