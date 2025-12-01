@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Registro PR's+ (IA Final)</title>
+    <title>Registro PR's+ (Análise de Treino)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -48,9 +48,11 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useMemo, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { Activity, BarChart2, Plus, Calendar, Trash2, ChevronDown, Trophy, Sparkles, Brain, X, Map, Zap, Settings, Download, Upload, Flame, LayoutGrid, Pencil, Utensils, ChefHat, HelpCircle, Info, RefreshCw } from 'lucide-react';
+        // Ícones necessários
+        import { BarChart2, Plus, Trash2, Pencil, Trophy, Sparkles, Brain, X, Settings, Download, Upload, Flame, LayoutGrid, ChevronDown, RefreshCw } from 'lucide-react';
 
         // --- CONSTANTES ---
+        // Usado como fallback, mas o usuário pode inserir a própria chave.
         const DEFAULT_API_KEY = "AIzaSyCZgPRLTn0OQZHB4rIj6bnWfrXTKRSWra0"; 
 
         // --- UTILITÁRIO DE DATA LOCAL ---
@@ -62,7 +64,7 @@
             return `${year}-${month}-${day}`;
         };
 
-        // --- CATÁLOGO COMPLETO ---
+        // --- CATÁLOGO COMPLETO (MANTIDO) ---
         const EXERCISE_CATALOG = {
             "Peitoral": {
                 "Supino Reto": ["Barra Livre", "Halteres", "Smith", "Máquina Vertical", "Máquina Horizontal", "Articulado (Hammer)", "Chão (Floor Press)"],
@@ -161,6 +163,7 @@
             }
         };
 
+        // --- SERVIÇO DE STORAGE (MANTIDO) ---
         const StorageService = {
             KEY_LOGS: 'registro_prs_logs_v2',
             KEY_API: 'registro_prs_api_key',
@@ -199,6 +202,7 @@
             },
             getApiKey: () => {
                 const stored = localStorage.getItem(StorageService.KEY_API);
+                // Retorna a chave armazenada se for válida (maior que 10 caracteres)
                 if (stored && stored.trim().length > 10) return stored;
                 return DEFAULT_API_KEY;
             },
@@ -207,10 +211,11 @@
 
         // --- COMPONENTE PRINCIPAL ---
         function App() {
-            const [activeTab, setActiveTab] = useState('metrics');
+            // Tabs: 'metrics' (Dashboard/Análise) ou 'log' (Registro)
+            const [activeTab, setActiveTab] = useState('metrics'); 
             const [logs, setLogs] = useState([]);
             const [showSettings, setShowSettings] = useState(false);
-            const [apiKey, setApiKey] = useState('');
+            const [apiKey, setApiKey] = useState(''); // Estado para a chave API
 
             useEffect(() => {
                 const keyToUse = StorageService.getApiKey();
@@ -221,11 +226,12 @@
             const handleSaveKey = () => {
                 StorageService.setApiKey(apiKey);
                 setShowSettings(false);
-                alert("Chave salva! O app usará sua chave personalizada.");
+                // Usando uma div modal simples em vez de alert()
+                document.getElementById('root').insertAdjacentHTML('beforeend', `<div id="msg-box" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]"><div class="bg-white p-6 rounded-xl shadow-2xl text-center"><p class="font-bold text-lg mb-2">Sucesso!</p><p class="text-gray-600">Chave salva! O app usará sua chave personalizada.</p><button onclick="document.getElementById('msg-box').remove()" class="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm">OK</button></div></div>`);
             };
 
             const handleDelete = (timestamp) => {
-                if(confirm("Tem certeza que deseja apagar este registro?")) {
+                if(window.confirm("Tem certeza que deseja apagar este registro?")) {
                     setLogs(StorageService.deleteLog(timestamp));
                 }
             };
@@ -238,6 +244,7 @@
             const refreshLogs = () => setLogs(StorageService.getLogs());
 
             const resolveApiKey = () => {
+                // Se a chave no estado não for válida, usa a chave padrão, garantindo que sempre haja uma
                 if (apiKey && apiKey.trim().length > 10) return apiKey;
                 return DEFAULT_API_KEY;
             };
@@ -272,32 +279,28 @@
                     <main className="max-w-4xl mx-auto p-4 flex-grow w-full">
                         {activeTab === 'log' ? (
                             <LoggerSection onUpdateLogs={(newLogs) => setLogs(newLogs)} apiKey={resolveApiKey()} />
-                        ) : activeTab === 'planner' ? (
-                            <PlannerSection apiKey={resolveApiKey()} />
-                        ) : activeTab === 'nutrition' ? (
-                            <NutritionSection apiKey={resolveApiKey()} />
                         ) : (
+                            // 'metrics' é a única outra aba
                             <MetricsSection logs={logs} apiKey={resolveApiKey()} onDelete={handleDelete} onUpdate={handleUpdate} />
                         )}
                     </main>
 
+                    {/* Navegação Mobile Otimizada */}
                     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around p-2 pb-[env(safe-area-inset-bottom)] md:hidden shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-20">
                         <NavBtn icon={BarChart2} label="Dash" active={activeTab === 'metrics'} onClick={() => setActiveTab('metrics')} />
                         <NavBtn icon={Plus} label="Registrar" active={activeTab === 'log'} onClick={() => setActiveTab('log')} />
-                        <NavBtn icon={Map} label="Treino" active={activeTab === 'planner'} onClick={() => setActiveTab('planner')} />
-                        <NavBtn icon={Utensils} label="Nutri AI" active={activeTab === 'nutrition'} onClick={() => setActiveTab('nutrition')} />
                     </nav>
 
+                    {/* Navegação Desktop Otimizada */}
                     <div className="hidden md:flex justify-center mt-6 space-x-4 mb-10">
-                        <DesktopBtn label="Dashboard" active={activeTab === 'metrics'} onClick={() => setActiveTab('metrics')} />
+                        <DesktopBtn label="Dashboard / Análise" active={activeTab === 'metrics'} onClick={() => setActiveTab('metrics')} />
                         <DesktopBtn label="Registrar PR" active={activeTab === 'log'} onClick={() => setActiveTab('log')} />
-                        <DesktopBtn label="Treino IA" active={activeTab === 'planner'} onClick={() => setActiveTab('planner')} />
-                        <DesktopBtn label="Nutri AI" active={activeTab === 'nutrition'} onClick={() => setActiveTab('nutrition')} />
                     </div>
                 </div>
             );
         }
 
+        // --- COMPONENTES DE BOTÕES ---
         const NavBtn = ({ icon: Icon, label, active, onClick }) => (
             <button onClick={onClick} className={`flex flex-col items-center p-2 rounded-xl transition w-full ${active ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400 hover:text-gray-600'}`}>
                 <Icon className={`w-6 h-6 mb-1 ${active ? 'fill-current' : ''}`} strokeWidth={active ? 2.5 : 2} />
@@ -333,16 +336,21 @@
                     try {
                         const importedLogs = JSON.parse(e.target.result);
                         if (Array.isArray(importedLogs)) {
-                            if (confirm(`Encontrados ${importedLogs.length} registros.\n\nISSO SUBSTITUIRÁ SEUS DADOS ATUAIS.\n\nDeseja continuar?`)) {
+                            // Usando window.confirm em vez de custom modal para esta lógica crítica
+                            if (window.confirm(`Encontrados ${importedLogs.length} registros.\n\nISSO SUBSTITUIRÁ SEUS DADOS ATUAIS.\n\nDeseja continuar?`)) {
                                 StorageService.importLogs(importedLogs);
                                 onImportSuccess();
-                                alert("Dados restaurados com sucesso!");
+                                // Usando uma div modal simples em vez de alert()
+                                document.getElementById('root').insertAdjacentHTML('beforeend', `<div id="msg-box-import" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]"><div class="bg-white p-6 rounded-xl shadow-2xl text-center"><p class="font-bold text-lg mb-2">Sucesso!</p><p class="text-gray-600">Dados restaurados com sucesso!</p><button onclick="document.getElementById('msg-box-import').remove()" class="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm">OK</button></div></div>`);
                                 onClose();
                             }
                         } else {
-                            alert("Arquivo JSON inválido.");
+                            // Usando uma div modal simples em vez de alert()
+                             document.getElementById('root').insertAdjacentHTML('beforeend', `<div id="msg-box-err" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]"><div class="bg-white p-6 rounded-xl shadow-2xl text-center"><p class="font-bold text-lg mb-2 text-red-600">Erro!</p><p class="text-gray-600">Arquivo JSON inválido ou com erros de leitura.</p><button onclick="document.getElementById('msg-box-err').remove()" class="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm">OK</button></div></div>`);
                         }
-                    } catch (err) { alert("Erro ao ler arquivo."); }
+                    } catch (err) { 
+                        document.getElementById('root').insertAdjacentHTML('beforeend', `<div id="msg-box-err2" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]"><div class="bg-white p-6 rounded-xl shadow-2xl text-center"><p class="font-bold text-lg mb-2 text-red-600">Erro!</p><p class="text-gray-600">Erro ao processar o arquivo.</p><button onclick="document.getElementById('msg-box-err2').remove()" class="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm">OK</button></div></div>`);
+                    }
                 };
                 reader.readAsText(file);
             };
@@ -357,16 +365,19 @@
                         
                         <div className="mb-6 bg-indigo-50 p-4 rounded-xl border border-indigo-100">
                             <h4 className="text-xs font-bold text-indigo-600 uppercase mb-2 tracking-wider flex items-center">
-                                <Brain className="w-3 h-3 mr-1" /> Status da IA
+                                <Brain className="w-3 h-3 mr-1" /> Configuração da IA
                             </h4>
+                            <p className="text-xs text-gray-600 mb-3">
+                                Insira sua chave API para utilizar o Coach IA e o Gerador de Dicas. Suporta Gemini e outros modelos compatíveis com a mesma API URL.
+                            </p>
                             <div className="text-xs text-gray-600 mb-3">
                                 {isUsingDefault 
-                                    ? <span className="text-green-600 font-bold">✅ Usando chave padrão do sistema (Conectado)</span> 
-                                    : <span className="text-blue-600 font-bold">🔹 Usando sua chave personalizada</span>}
+                                    ? <span className="text-red-600 font-bold">⚠️ Usando chave padrão (limitações)</span> 
+                                    : <span className="text-blue-600 font-bold">✅ Usando sua chave personalizada</span>}
                             </div>
-                            <label className="block text-xs text-gray-400 mb-1">Personalizar Chave (Opcional)</label>
+                            <label className="block text-xs text-gray-400 mb-1">Chave API (Ex: AIzaSy...)</label>
                             <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Chave padrão ativa..." className="w-full p-3 border border-gray-200 rounded-xl mb-2 text-sm font-mono bg-white focus:ring-2 focus:ring-indigo-500 outline-none" />
-                            <button onClick={onSave} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm hover:bg-indigo-700 active:scale-95 transition">Salvar / Restaurar</button>
+                            <button onClick={onSave} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm hover:bg-indigo-700 active:scale-95 transition">Salvar Chave</button>
                         </div>
 
                         <hr className="border-gray-100 my-4" />
@@ -399,12 +410,13 @@
             const [loading, setLoading] = useState(false);
             const [editingLog, setEditingLog] = useState(null);
 
+            // Calcula o Heatmap de constância (últimos 30 dias)
             const heatmapData = useMemo(() => {
                 const days = [];
                 const today = new Date();
                 const offset = today.getTimezoneOffset() * 60000;
                 
-                for (let i = 27; i >= 0; i--) {
+                for (let i = 27; i >= 0; i--) { // 28 dias para um bom layout 7x4
                     const d = new Date(today.getTime() - (i * 86400000) - offset);
                     const dateStr = d.toISOString().split('T')[0];
                     const count = logs.filter(l => l.workoutDate === dateStr).length;
@@ -413,6 +425,7 @@
                 return days;
             }, [logs]);
 
+            // Estatísticas de Foco Muscular
             const muscleStats = useMemo(() => {
                 const stats = {};
                 let total = 0;
@@ -425,37 +438,55 @@
                     .sort((a,b) => b.count - a.count);
             }, [logs]);
 
+            // Top PRs
             const prs = useMemo(() => {
                 const map = {};
                 logs.forEach(l => {
                     const key = `${l.exercise} ${l.variation}`;
-                    if(!map[key] || l.weight > map[key].maxW) {
-                         map[key] = { maxW: l.weight, maxR: l.reps, date: l.dateString, group: l.muscleGroup }; 
+                    // Atualiza o PR se for um peso maior ou se for o mesmo peso com mais repetições
+                    if(!map[key] || l.weight > map[key].maxW || (l.weight === map[key].maxW && l.reps > map[key].maxR)) {
+                         map[key] = { maxW: l.weight, maxR: l.reps, date: l.dateString, group: l.muscleGroup, id: l.id }; 
                     }
                 });
                 return Object.entries(map).slice(0, 6);
             }, [logs]);
 
+            // Histórico Agrupado por Data
             const groupedHistory = useMemo(() => {
                 const groups = {};
                 logs.forEach(l => {
                     if(!groups[l.dateString]) groups[l.dateString] = [];
                     groups[l.dateString].push(l);
                 });
+                // Ordenação reversa por data
                 return Object.entries(groups).sort((a,b) => {
-                    const dateA = a[0].split('/').reverse().join('');
-                    const dateB = b[0].split('/').reverse().join('');
+                    // Converte D/M/A para A-M-D para comparação correta
+                    const [dA, mA, yA] = a[0].split('/');
+                    const dateA = `${yA}-${mA}-${dA}`;
+                    const [dB, mB, yB] = b[0].split('/');
+                    const dateB = `${yB}-${mB}-${dB}`;
                     return dateB.localeCompare(dateA);
                 });
             }, [logs]);
 
+            // Função de Análise da IA
             const analyze = async () => {
-                if(!apiKey) { alert("API Key ausente."); return; }
+                if(!apiKey || apiKey === DEFAULT_API_KEY) { 
+                    alert("Por favor, insira sua Chave API nas Configurações para usar o Coach IA."); 
+                    return; 
+                }
+
+                if (logs.length === 0) {
+                     setAnalysis("Registre alguns treinos primeiro para que o Coach IA possa analisar seu progresso!");
+                     return;
+                }
 
                 setLoading(true);
+                setAnalysis('');
                 try {
+                    // Pega os 30 registros mais recentes
                     const history = logs.slice(0, 30).map(l => `${l.dateString}: ${l.exercise} (${l.weight}kg x ${l.reps})`).join('\n');
-                    const prompt = `Aja como um treinador. Analise este histórico de treino recente e me dê um feedback curto e motivador. Histórico:\n${history}`;
+                    const prompt = `Aja como um treinador pessoal focado em progressão de carga. Analise este histórico de treino recente (registros de peso/repetições) e me dê um feedback curto (máx 3 frases) e motivador sobre a progressão ou consistência. Destaque um ou dois PRs recentes (peso mais alto) se existirem. Histórico:\n${history}`;
                     
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                         method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -470,7 +501,7 @@
                     const data = await res.json();
                     setAnalysis(data.candidates?.[0]?.content?.parts?.[0]?.text || "Erro na análise. Sem resposta.");
                 } catch(e) { 
-                    setAnalysis(`Erro na IA: ${e.message}. Verifique restrições de domínio da API Key.`); 
+                    setAnalysis(`Erro na IA: ${e.message}. Verifique sua chave API e a permissão de domínio.`); 
                 }
                 setLoading(false);
             };
@@ -484,32 +515,45 @@
 
                     {view === 'dashboard' ? (
                         <>
+                            {/* Card de Constância (Heatmap) */}
                             <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
-                                <h3 className="font-bold text-gray-800 mb-4 flex items-center text-sm uppercase tracking-wider"><Flame className="w-4 h-4 mr-2 text-orange-500" fill="currentColor"/> Constância (30 dias)</h3>
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center text-sm uppercase tracking-wider"><Flame className="w-4 h-4 mr-2 text-orange-500" fill="currentColor"/> Constância (Últimos 28 dias)</h3>
                                 <div className="grid grid-cols-7 gap-2">
                                     {heatmapData.map((d, i) => (
-                                        <div key={i} className={`aspect-square rounded-md flex items-center justify-center text-[10px] font-bold transition-all hover:scale-110 ${d.count > 0 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-gray-100 text-gray-300'}`}>
+                                        <div 
+                                            key={i} 
+                                            title={d.date}
+                                            className={`aspect-square rounded-md flex items-center justify-center text-[10px] font-bold transition-all hover:scale-110 ${d.count > 0 ? 'text-white shadow-md shadow-indigo-200' : 'bg-gray-100 text-gray-300'}`}
+                                            style={{
+                                                backgroundColor: d.count > 0 ? `rgba(99, 102, 241, ${Math.min(1, d.count * 0.4)})` : undefined, // Escala de cor baseada na contagem
+                                                borderColor: d.count > 0 ? '#6366F1' : '#E5E7EB'
+                                            }}
+                                        >
                                             {d.dayNum}
                                         </div>
                                     ))}
                                 </div>
                             </div>
+                            
+                            {/* Card Coach IA */}
                             <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-3xl p-5 text-white shadow-lg relative overflow-hidden">
                                 <Brain className="absolute right-0 top-0 w-24 h-24 text-white opacity-10 -mr-6 -mt-6"/>
                                 <div className="relative z-10">
                                     <div className="flex justify-between items-center mb-3">
-                                        <h3 className="font-bold flex items-center"><Sparkles className="w-4 h-4 mr-2 text-yellow-300"/> Coach IA</h3>
+                                        <h3 className="font-bold flex items-center"><Sparkles className="w-4 h-4 mr-2 text-yellow-300"/> Coach IA (Análise de Treino)</h3>
                                         <button onClick={analyze} disabled={loading} className="text-[10px] bg-white/20 px-3 py-1.5 rounded-full hover:bg-white/30 font-bold transition disabled:opacity-50">
                                             {loading ? "Pensando..." : "Analisar Progresso"}
                                         </button>
                                     </div>
                                     <div className="bg-black/20 p-3 rounded-xl min-h-[60px]">
-                                        {analysis ? <div className="text-xs whitespace-pre-wrap leading-relaxed">{analysis}</div> : <p className="text-xs opacity-70 italic">Toque em analisar para receber feedback.</p>}
+                                        {analysis ? <div className="text-xs whitespace-pre-wrap leading-relaxed">{analysis}</div> : <p className="text-xs opacity-70 italic">Toque em analisar para receber feedback personalizado sobre seus registros de carga.</p>}
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Card Foco Muscular */}
                             <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
-                                <h3 className="font-bold text-gray-800 mb-4 flex items-center text-sm uppercase tracking-wider"><LayoutGrid className="w-4 h-4 mr-2 text-indigo-500"/> Foco Muscular</h3>
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center text-sm uppercase tracking-wider"><LayoutGrid className="w-4 h-4 mr-2 text-indigo-500"/> Foco Muscular (Distribuição)</h3>
                                 <div className="space-y-3">
                                     {muscleStats.slice(0, 5).map((s) => (
                                         <div key={s.name}>
@@ -525,14 +569,16 @@
                                     {muscleStats.length === 0 && <p className="text-center text-xs text-gray-400">Nenhum dado registrado.</p>}
                                 </div>
                             </div>
+                            
+                            {/* Card Top Recordes */}
                             <div>
-                                <h3 className="font-bold text-gray-800 mb-3 ml-1 text-sm uppercase tracking-wider">Top Recordes</h3>
+                                <h3 className="font-bold text-gray-800 mb-3 ml-1 text-sm uppercase tracking-wider">Top Recordes (PRs)</h3>
                                 <div className="grid grid-cols-2 gap-3">
                                     {prs.map(([name, data]) => (
                                         <div key={name} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between hover:border-indigo-100 transition">
                                             <div>
                                                 <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-wide bg-indigo-50 px-1.5 py-0.5 rounded">{data.group}</span>
-                                                <h4 className="font-bold text-gray-800 text-xs leading-tight mt-2 mb-2 line-clamp-2">{name}</h4>
+                                                <h4 className="font-bold text-gray-800 text-xs leading-tight mt-2 mb-2 line-clamp-2">{name.split(' ')[0]}</h4>
                                             </div>
                                             <div className="flex items-end justify-between border-t border-gray-50 pt-2 mt-1">
                                                 <div className="text-xl font-black text-gray-900">{data.maxW}<span className="text-xs font-normal text-gray-400 ml-0.5">kg</span></div>
@@ -540,10 +586,16 @@
                                             </div>
                                         </div>
                                     ))}
+                                    {prs.length === 0 && (
+                                        <div className="col-span-2 text-center text-xs text-gray-400 p-4 bg-white rounded-xl italic">
+                                            Ainda não há PRs. Registre seu primeiro treino!
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </>
                     ) : (
+                        // Histórico Detalhado
                         <div className="space-y-8 pb-10">
                             {groupedHistory.map(([date, items]) => (
                                 <div key={date} className="relative pl-6 border-l-2 border-indigo-100">
@@ -554,7 +606,7 @@
                                             <div key={log.id} className="bg-white p-3.5 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center group active:scale-[0.99] transition">
                                                 <div className="flex-1 pr-2">
                                                     <div className="font-bold text-gray-700 text-sm">{log.exercise}</div>
-                                                    <div className="text-xs text-gray-400">{log.variation}</div>
+                                                    <div className="text-xs text-gray-400 line-clamp-1">{log.variation}</div>
                                                 </div>
                                                 <div className="flex items-center space-x-3">
                                                     <div className="text-right">
@@ -581,7 +633,7 @@
             );
         }
 
-        // --- EDIT MODAL ---
+        // --- EDIT MODAL (MANTIDO) ---
         function EditLogModal({ log, onClose, onSave }) {
             const [weight, setWeight] = useState(log.weight);
             const [reps, setReps] = useState(log.reps);
@@ -590,20 +642,28 @@
             const [type, setType] = useState(log.exercise);
             const [variation, setVariation] = useState(log.variation);
 
+            // Garante que o exercício e variação sejam válidos ao mudar o grupo
             useEffect(() => {
                 if (group && EXERCISE_CATALOG[group] && !EXERCISE_CATALOG[group][type]) { 
-                    // Não faz nada automaticamente para não resetar edição em andamento
+                    setType(''); 
+                    setVariation('');
                 }
             }, [group]);
 
             const handleSave = () => {
                 const [y, m, d] = date.split('-');
                 onSave({
-                    ...log, weight: parseFloat(weight), reps: parseInt(reps), workoutDate: date, dateString: `${d}/${m}/${y}`, muscleGroup: group, exercise: type, variation: variation
+                    ...log, 
+                    weight: parseFloat(weight), 
+                    reps: parseInt(reps), 
+                    workoutDate: date, 
+                    dateString: `${d}/${m}/${y}`, 
+                    muscleGroup: group, 
+                    exercise: type, 
+                    variation: variation
                 });
             };
 
-            // Helpers para evitar Crash (Tela Branca)
             const exerciseOptions = (group && EXERCISE_CATALOG[group]) ? Object.keys(EXERCISE_CATALOG[group]) : [];
             const variationOptions = (group && type && EXERCISE_CATALOG[group] && EXERCISE_CATALOG[group][type]) ? EXERCISE_CATALOG[group][type] : [];
 
@@ -611,8 +671,8 @@
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade backdrop-blur-sm">
                     <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-bold flex items-center text-indigo-600"><Pencil className="w-5 h-5 mr-2"/> Editar</h3>
-                            <button onClick={onClose}><X className="w-5 h-5 text-gray-400"/></button>
+                            <h3 className="text-lg font-bold flex items-center text-indigo-600"><Pencil className="w-5 h-5 mr-2"/> Editar Registro</h3>
+                            <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><X className="w-5 h-5 text-gray-400"/></button>
                         </div>
                         
                         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
@@ -668,6 +728,7 @@
             const [tipContent, setTipContent] = useState('');
             const [altContent, setAltContent] = useState('');
             
+            // Reseta estados de exercício e IA ao mudar grupo/tipo
             useEffect(() => { setType(''); setVariation(''); setTipContent(''); setAltContent(''); setShowTips(false); }, [group]);
             useEffect(() => { 
                 if(group && type && EXERCISE_CATALOG[group] && EXERCISE_CATALOG[group][type]) {
@@ -676,60 +737,76 @@
                 setTipContent(''); setAltContent(''); setShowTips(false);
             }, [type]);
 
+            // Função para buscar dicas de execução (Análise/Orientação)
             const fetchTips = async () => {
-                if(!apiKey) { alert("API Key ausente."); return; }
+                if(!apiKey || apiKey === DEFAULT_API_KEY) { 
+                    alert("Por favor, insira sua Chave API nas Configurações para usar as Dicas de Execução."); 
+                    return; 
+                }
                 setShowTips(true);
                 setAltContent(''); 
-                if(tipContent) return; 
+                if(tipContent) return; // Se já buscou, apenas mostra
 
                 setTipLoading(true);
                 try {
-                    const prompt = `Explique de forma resumida e direta (em bullet points) a forma correta de executar o exercício: ${type} (${variation}). Dê 2 dicas de segurança.`;
+                    const prompt = `Explique de forma resumida e direta (em bullet points) a forma correta de executar o exercício: ${type} (${variation}). Dê 2 dicas de segurança cruciais para este movimento.`;
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                         method: 'POST', headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
                     });
-                    if (!res.ok) throw new Error("Erro API");
+                    if (!res.ok) throw new Error("Erro na API de Geração");
                     const data = await res.json();
                     setTipContent(data.candidates?.[0]?.content?.parts?.[0]?.text || "Sem resposta.");
-                } catch(e) { setTipContent(`Erro: ${e.message}`); }
+                } catch(e) { setTipContent(`Erro: ${e.message}. Verifique sua chave.`); }
                 setTipLoading(false);
             };
 
+            // Função para buscar alternativa (Análise/Orientação)
             const fetchAlternative = async () => {
-                if(!apiKey) { alert("API Key ausente."); return; }
+                if(!apiKey || apiKey === DEFAULT_API_KEY) { 
+                    alert("Por favor, insira sua Chave API nas Configurações para usar as Sugestões de Alternativas."); 
+                    return; 
+                }
                 setShowTips(true);
                 setTipContent('');
-                if(altContent) return;
+                if(altContent) return; // Se já buscou, apenas mostra
 
                 setTipLoading(true);
                 try {
-                    const prompt = `Não tenho equipamento para fazer ${type} (${variation}). Sugira uma alternativa biomecanicamente similar que eu possa fazer em casa ou com equipamentos simples. Seja direto.`;
+                    const prompt = `Sugira uma alternativa biomecanicamente similar para o exercício ${type} (${variation}) que possa ser feita em casa ou com equipamentos simples. Seja direto e explique o foco muscular.`;
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                         method: 'POST', headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
                     });
-                    if (!res.ok) throw new Error("Erro API");
+                    if (!res.ok) throw new Error("Erro na API de Geração");
                     const data = await res.json();
                     setAltContent(data.candidates?.[0]?.content?.parts?.[0]?.text || "Sem resposta.");
-                } catch(e) { setAltContent(`Erro: ${e.message}`); }
+                } catch(e) { setAltContent(`Erro: ${e.message}. Verifique sua chave.`); }
                 setTipLoading(false);
             };
+
 
             const handleSave = (e) => {
                 e.preventDefault();
+                // Validação mínima
+                if (!variation || !weight || parseFloat(weight) <= 0 || !reps || parseInt(reps) <= 0) {
+                    alert("Preencha o grupo, exercício, variação, carga e repetições.");
+                    return;
+                }
+
                 const [y, m, d] = date.split('-');
                 const log = {
                     id: Date.now(), muscleGroup: group, exercise: type, variation, weight: parseFloat(weight), reps: parseInt(reps),
                     workoutDate: date, dateString: `${d}/${m}/${y}`, createdAt: Date.now()
                 };
                 onUpdateLogs(StorageService.saveLog(log));
+                
+                // Reseta campos de peso e reps
                 setWeight(''); setReps('');
             };
 
-            // Helpers para evitar Crash no Logger
+            // Helpers para renderização segura
             const exerciseOptions = (group && EXERCISE_CATALOG[group]) ? Object.keys(EXERCISE_CATALOG[group]) : [];
-            // Safe access para variações
             const variationOptions = (group && type && EXERCISE_CATALOG[group]?.[type]) ? EXERCISE_CATALOG[group][type] : [];
 
             return (
@@ -743,7 +820,6 @@
                         
                         <Select label="Grupo Muscular" value={group} onChange={e=>setGroup(e.target.value)} options={Object.keys(EXERCISE_CATALOG)} />
                         
-                        {/* Renderização Condicional Segura para Exercício */}
                         {group && exerciseOptions.length > 0 && (
                             <div className="relative">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Exercício</label>
@@ -755,7 +831,6 @@
                             </div>
                         )}
                         
-                        {/* Renderização Condicional Segura para Variação */}
                         {type && variationOptions.length > 0 && (
                              <div className="relative">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Variação</label>
@@ -766,7 +841,7 @@
                             </div>
                         )}
 
-                        {/* BOTÕES DE IA */}
+                        {/* BOTÕES DE IA (Dicas e Alternativas - Análise de Treino/Orientação) */}
                         {type && variation && (
                             <div className="mt-2">
                                 <div className="flex gap-3">
@@ -779,7 +854,12 @@
                                 </div>
                                 {showTips && (
                                     <div className="mt-2 p-3 bg-white rounded-xl text-xs text-gray-700 border border-gray-200 leading-relaxed animate-fade shadow-sm">
-                                        {tipLoading ? "Consultando coach..." : 
+                                        {tipLoading ? 
+                                            <div className="flex items-center space-x-2 text-indigo-500">
+                                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                                <span>Consultando coach...</span>
+                                            </div>
+                                            : 
                                             <div className="whitespace-pre-wrap">
                                                 {tipContent && <><span className="font-bold text-indigo-600 block mb-1">Dicas de Execução:</span>{tipContent}</>}
                                                 {altContent && <><span className="font-bold text-emerald-600 block mb-1">Alternativa Sugerida:</span>{altContent}</>}
@@ -791,116 +871,18 @@
                         )}
 
                         <div className="grid grid-cols-2 gap-3 pt-2">
-                            <Input label="Carga (kg)" type="number" value={weight} onChange={e=>setWeight(e.target.value)} placeholder="0" />
-                            <Input label="Reps" type="number" value={reps} onChange={e=>setReps(e.target.value)} placeholder="0" />
+                            <Input label="Carga (kg)" type="number" value={weight} onChange={e=>setWeight(e.target.value)} placeholder="0" step="0.5" min="0" />
+                            <Input label="Reps" type="number" value={reps} onChange={e=>setReps(e.target.value)} placeholder="0" min="1" />
                         </div>
-                        <button disabled={!variation || !weight} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:shadow-none active:scale-95 transition mt-4">
+                        <button disabled={!variation || !weight || !reps} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:shadow-none active:scale-95 transition mt-4">
                             CONFIRMAR SÉRIE
                         </button>
                     </form>
                 </div>
             );
         }
-
-        // --- PLANNER (IA) ---
-        function PlannerSection({ apiKey }) {
-            const [goal, setGoal] = useState('');
-            const [plan, setPlan] = useState('');
-            const [loading, setLoading] = useState(false);
-            const handlePlan = async (e) => {
-                e.preventDefault();
-                if(!apiKey) { alert("API Key ausente."); return; }
-
-                setLoading(true);
-                try {
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ contents: [{ parts: [{ text: `Crie um treino detalhado (Markdown simples) baseado nisto: "${goal}". Seja direto.` }] }] })
-                    });
-                    
-                    if (!res.ok) throw new Error("Erro API");
-
-                    const data = await res.json();
-                    setPlan(data.candidates?.[0]?.content?.parts?.[0]?.text);
-                } catch(e) { alert(`Erro IA: ${e.message}`); }
-                setLoading(false);
-            };
-            return (
-                <div className="animate-slide space-y-4">
-                    <div className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
-                        <Zap className="absolute right-0 top-0 w-32 h-32 opacity-10 -mr-6 -mt-6"/>
-                        <h2 className="text-xl font-bold mb-2 flex items-center relative z-10"><Map className="w-5 h-5 mr-2"/> Gerador de Treino</h2>
-                        <textarea value={goal} onChange={e=>setGoal(e.target.value)} placeholder="Ex: Peito e Tríceps foco em força, tenho apenas halteres..." className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/60 outline-none h-28 text-sm relative z-10"></textarea>
-                        <button onClick={handlePlan} disabled={loading} className="mt-3 w-full bg-white text-teal-700 font-bold py-3 rounded-xl text-sm shadow-lg relative z-10 hover:bg-teal-50 transition">
-                            {loading ? "Criando Estratégia..." : "Gerar Treino com IA"}
-                        </button>
-                    </div>
-                    {plan && (
-                        <div className="bg-white p-6 rounded-3xl shadow-sm prose prose-sm max-w-none animate-fade border border-gray-100">
-                             <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-                                {plan.replace(/\*\*/g, '').split('\n').map((line, i) => (
-                                    <p key={i} className={`${line.startsWith('#') ? 'font-bold text-teal-700 text-lg mt-4 border-b border-gray-100 pb-1' : 'mb-2'}`}>
-                                        {line.replace(/^#+\s/, '')}
-                                    </p>
-                                ))}
-                             </div>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        // --- NUTRITION (IA) ---
-        function NutritionSection({ apiKey }) {
-            const [query, setQuery] = useState('');
-            const [response, setResponse] = useState('');
-            const [loading, setLoading] = useState(false);
-
-            const handleAskNutri = async (e) => {
-                e.preventDefault();
-                if(!apiKey) { alert("API Key ausente."); return; }
-
-                setLoading(true);
-                try {
-                    const prompt = `Aja como um nutricionista esportivo. Responda a seguinte dúvida sobre alimentação de forma prática e saudável: "${query}". Use Markdown simples.`;
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                    });
-
-                    if (!res.ok) throw new Error("Erro API");
-
-                    const data = await res.json();
-                    setResponse(data.candidates?.[0]?.content?.parts?.[0]?.text);
-                } catch(e) { alert(`Erro IA: ${e.message}`); }
-                setLoading(false);
-            };
-
-            return (
-                <div className="animate-slide space-y-4">
-                    <div className="bg-gradient-to-br from-orange-400 to-red-500 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
-                        <ChefHat className="absolute right-0 top-0 w-32 h-32 opacity-10 -mr-6 -mt-6"/>
-                        <h2 className="text-xl font-bold mb-2 flex items-center relative z-10"><Utensils className="w-5 h-5 mr-2"/> Nutri AI</h2>
-                        <textarea value={query} onChange={e=>setQuery(e.target.value)} placeholder="Ex: O que comer pós-treino de perna? Tenho ovos e batata..." className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/60 outline-none h-28 text-sm relative z-10"></textarea>
-                        <button onClick={handleAskNutri} disabled={loading} className="mt-3 w-full bg-white text-orange-600 font-bold py-3 rounded-xl text-sm shadow-lg relative z-10 hover:bg-orange-50 transition">
-                            {loading ? "Consultando Nutricionista..." : "Pedir Sugestão"}
-                        </button>
-                    </div>
-                    {response && (
-                        <div className="bg-white p-6 rounded-3xl shadow-sm prose prose-sm max-w-none animate-fade border border-gray-100">
-                             <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-                                {response.replace(/\*\*/g, '').split('\n').map((line, i) => (
-                                    <p key={i} className={`${line.startsWith('#') ? 'font-bold text-orange-600 text-lg mt-4 border-b border-gray-100 pb-1' : 'mb-2'}`}>
-                                        {line.replace(/^#+\s/, '')}
-                                    </p>
-                                ))}
-                             </div>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
+        
+        // --- COMPONENTES AUXILIARES (MANTIDOS) ---
         const Select = ({ label, value, onChange, options }) => (
             <div className="relative">
                 <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">{label}</label>
@@ -923,5 +905,4 @@
     </script>
 </body>
 </html>
-
 
