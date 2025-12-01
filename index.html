@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Registro PR's+ (Análise de Treino)</title>
+    <title>Registro PR's+ (Análise Completa)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -49,13 +49,12 @@
         import React, { useState, useEffect, useMemo, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
         // Ícones necessários
-        import { BarChart2, Plus, Trash2, Pencil, Trophy, Sparkles, Brain, X, Settings, Download, Upload, Flame, LayoutGrid, ChevronDown, RefreshCw } from 'lucide-react';
+        import { BarChart2, Plus, Trash2, Pencil, Trophy, Sparkles, Brain, X, Settings, Download, Upload, Flame, LayoutGrid, ChevronDown, RefreshCw, TrendingUp, Hash, Clock, Route, Search, AlertTriangle } from 'lucide-react';
 
         // --- CONSTANTES ---
-        // Usado como fallback, mas o usuário pode inserir a própria chave.
         const DEFAULT_API_KEY = "AIzaSyCZgPRLTn0OQZHB4rIj6bnWfrXTKRSWra0"; 
 
-        // --- UTILITÁRIO DE DATA LOCAL ---
+        // --- UTILITÁRIOS ---
         const getLocalTodayDate = () => {
             const now = new Date();
             const year = now.getFullYear();
@@ -63,8 +62,14 @@
             const day = String(now.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         };
+        const parseDate = (dateStr) => {
+            const [y, m, d] = dateStr.split('-');
+            // Usa UTC para evitar problemas de fuso horário, mas garante que a data seja válida.
+            return new Date(Date.UTC(y, m - 1, d));
+        };
+        const isCardio = (group) => group === 'Cardio';
 
-        // --- CATÁLOGO COMPLETO (MANTIDO) ---
+        // --- CATÁLOGO COMPLETO ---
         const EXERCISE_CATALOG = {
             "Peitoral": {
                 "Supino Reto": ["Barra Livre", "Halteres", "Smith", "Máquina Vertical", "Máquina Horizontal", "Articulado (Hammer)", "Chão (Floor Press)"],
@@ -163,7 +168,7 @@
             }
         };
 
-        // --- SERVIÇO DE STORAGE (MANTIDO) ---
+        // --- SERVIÇO DE STORAGE ---
         const StorageService = {
             KEY_LOGS: 'registro_prs_logs_v2',
             KEY_API: 'registro_prs_api_key',
@@ -175,7 +180,14 @@
             },
             saveLog: (log) => {
                 const logs = StorageService.getLogs();
-                const newLogs = [log, ...logs];
+                const sanitizedLog = {
+                    ...log,
+                    weight: log.weight || null,
+                    reps: log.reps || null,
+                    time: log.time || null,
+                    distance: log.distance || null
+                };
+                const newLogs = [sanitizedLog, ...logs];
                 localStorage.setItem(StorageService.KEY_LOGS, JSON.stringify(newLogs));
                 return newLogs;
             },
@@ -202,49 +214,101 @@
             },
             getApiKey: () => {
                 const stored = localStorage.getItem(StorageService.KEY_API);
-                // Retorna a chave armazenada se for válida (maior que 10 caracteres)
                 if (stored && stored.trim().length > 10) return stored;
                 return DEFAULT_API_KEY;
             },
             setApiKey: (key) => localStorage.setItem(StorageService.KEY_API, key)
         };
 
+        // --- MODAL DE MENSAGENS E CONFIRMAÇÃO (Estável) ---
+        function MessageModal({ title, message, onConfirm, onClose, type = 'info' }) {
+            let bgColor, icon;
+            if (type === 'success') {
+                bgColor = 'bg-green-600';
+                icon = <Trophy className="w-6 h-6 text-white"/>;
+            } else if (type === 'error') {
+                bgColor = 'bg-red-600';
+                icon = <AlertTriangle className="w-6 h-6 text-white"/>;
+            } else if (type === 'confirm') {
+                bgColor = 'bg-orange-600';
+                icon = <Trash2 className="w-6 h-6 text-white"/>;
+            } else { // info
+                bgColor = 'bg-indigo-600';
+                icon = <Sparkles className="w-6 h-6 text-white"/>;
+            }
+
+            const handleConfirm = onConfirm || onClose;
+            const handleCancel = onClose;
+
+            return (
+                <div className="fixed inset-0 bg-black/70 z-[9999] flex items-center justify-center p-4 animate-fade backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl text-center">
+                        <div className={`mx-auto ${bgColor} p-3 rounded-full w-fit mb-4`}>{icon}</div>
+                        <h3 className="font-black text-xl text-gray-800 mb-2">{title}</h3>
+                        <p className="text-sm text-gray-600 mb-6 whitespace-pre-wrap">{message}</p>
+                        
+                        {type === 'confirm' ? (
+                            <div className="flex gap-3">
+                                <button onClick={handleCancel} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded-xl hover:bg-gray-50 transition">Cancelar</button>
+                                <button onClick={handleConfirm} className="flex-1 bg-red-600 text-white font-bold py-2 rounded-xl hover:bg-red-700 transition">Confirmar</button>
+                            </div>
+                        ) : (
+                            <button onClick={handleCancel} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl hover:bg-indigo-700 transition">Entendi</button>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
         // --- COMPONENTE PRINCIPAL ---
         function App() {
-            // Tabs: 'metrics' (Dashboard/Análise) ou 'log' (Registro)
             const [activeTab, setActiveTab] = useState('metrics'); 
             const [logs, setLogs] = useState([]);
             const [showSettings, setShowSettings] = useState(false);
-            const [apiKey, setApiKey] = useState(''); // Estado para a chave API
+            const [apiKey, setApiKey] = useState(''); 
+            const [modal, setModal] = useState(null); 
 
             useEffect(() => {
                 const keyToUse = StorageService.getApiKey();
                 setLogs(StorageService.getLogs());
                 setApiKey(keyToUse);
             }, []);
+            
+            // Função centralizada para exibir modais (incluindo confirm)
+            const showMessage = (title, message, type = 'info', onConfirmAction = () => {}, onCloseAction = () => {}) => {
+                 setModal({ 
+                    title, 
+                    message, 
+                    type, 
+                    onConfirm: () => { onConfirmAction(); setModal(null); }, 
+                    onClose: () => { onCloseAction(); setModal(null); } 
+                });
+            }
 
             const handleSaveKey = () => {
                 StorageService.setApiKey(apiKey);
                 setShowSettings(false);
-                // Usando uma div modal simples em vez de alert()
-                document.getElementById('root').insertAdjacentHTML('beforeend', `<div id="msg-box" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]"><div class="bg-white p-6 rounded-xl shadow-2xl text-center"><p class="font-bold text-lg mb-2">Sucesso!</p><p class="text-gray-600">Chave salva! O app usará sua chave personalizada.</p><button onclick="document.getElementById('msg-box').remove()" class="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm">OK</button></div></div>`);
+                showMessage("Chave Salva!", "O aplicativo agora usará sua chave API personalizada.", "success");
             };
 
-            const handleDelete = (timestamp) => {
-                if(window.confirm("Tem certeza que deseja apagar este registro?")) {
-                    setLogs(StorageService.deleteLog(timestamp));
-                }
+            const handleDelete = (log) => {
+                showMessage(
+                    "Apagar Registro", 
+                    `Tem certeza que deseja apagar o registro de ${log.exercise} (${log.dateString})? Esta ação é irreversível.`, 
+                    'confirm', 
+                    () => setLogs(StorageService.deleteLog(log.createdAt))
+                );
             };
 
             const handleUpdate = (updatedLog) => {
                 const newLogs = StorageService.updateLog(updatedLog);
                 setLogs(newLogs.sort((a, b) => b.createdAt - a.createdAt));
+                showMessage("Edição Salva", "O registro foi atualizado com sucesso.", "success");
             };
 
             const refreshLogs = () => setLogs(StorageService.getLogs());
 
             const resolveApiKey = () => {
-                // Se a chave no estado não for válida, usa a chave padrão, garantindo que sempre haja uma
                 if (apiKey && apiKey.trim().length > 10) return apiKey;
                 return DEFAULT_API_KEY;
             };
@@ -273,29 +337,29 @@
                             onClose={() => setShowSettings(false)}
                             logs={logs}
                             onImportSuccess={refreshLogs}
+                            showMessage={showMessage}
                         />
                     )}
 
                     <main className="max-w-4xl mx-auto p-4 flex-grow w-full">
                         {activeTab === 'log' ? (
-                            <LoggerSection onUpdateLogs={(newLogs) => setLogs(newLogs)} apiKey={resolveApiKey()} />
+                            <LoggerSection onUpdateLogs={(newLogs) => setLogs(newLogs)} apiKey={resolveApiKey()} showMessage={showMessage} />
                         ) : (
-                            // 'metrics' é a única outra aba
-                            <MetricsSection logs={logs} apiKey={resolveApiKey()} onDelete={handleDelete} onUpdate={handleUpdate} />
+                            <MetricsSection logs={logs} apiKey={resolveApiKey()} onDelete={handleDelete} onUpdate={handleUpdate} showMessage={showMessage} />
                         )}
                     </main>
 
-                    {/* Navegação Mobile Otimizada */}
                     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around p-2 pb-[env(safe-area-inset-bottom)] md:hidden shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-20">
                         <NavBtn icon={BarChart2} label="Dash" active={activeTab === 'metrics'} onClick={() => setActiveTab('metrics')} />
                         <NavBtn icon={Plus} label="Registrar" active={activeTab === 'log'} onClick={() => setActiveTab('log')} />
                     </nav>
 
-                    {/* Navegação Desktop Otimizada */}
                     <div className="hidden md:flex justify-center mt-6 space-x-4 mb-10">
                         <DesktopBtn label="Dashboard / Análise" active={activeTab === 'metrics'} onClick={() => setActiveTab('metrics')} />
                         <DesktopBtn label="Registrar PR" active={activeTab === 'log'} onClick={() => setActiveTab('log')} />
                     </div>
+                    
+                    {modal && <MessageModal {...modal} />}
                 </div>
             );
         }
@@ -311,8 +375,8 @@
             <button onClick={onClick} className={`px-6 py-2 rounded-full font-bold text-sm transition transform hover:scale-105 ${active ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow border hover:bg-gray-50'}`}>{label}</button>
         );
 
-        // --- MODAL DE CONFIGURAÇÕES ---
-        function SettingsModal({ apiKey, setApiKey, onSave, onClose, logs, onImportSuccess }) {
+        // --- MODAL DE CONFIGURAÇÕES (Estável) ---
+        function SettingsModal({ apiKey, setApiKey, onSave, onClose, logs, onImportSuccess, showMessage }) {
             const fileInputRef = useRef(null);
             const isUsingDefault = !apiKey || apiKey === DEFAULT_API_KEY;
 
@@ -326,6 +390,7 @@
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
+                showMessage("Exportação Concluída", "Seu backup foi baixado como JSON.", "success");
             };
 
             const handleFileChange = (event) => {
@@ -336,20 +401,19 @@
                     try {
                         const importedLogs = JSON.parse(e.target.result);
                         if (Array.isArray(importedLogs)) {
-                            // Usando window.confirm em vez de custom modal para esta lógica crítica
-                            if (window.confirm(`Encontrados ${importedLogs.length} registros.\n\nISSO SUBSTITUIRÁ SEUS DADOS ATUAIS.\n\nDeseja continuar?`)) {
-                                StorageService.importLogs(importedLogs);
-                                onImportSuccess();
-                                // Usando uma div modal simples em vez de alert()
-                                document.getElementById('root').insertAdjacentHTML('beforeend', `<div id="msg-box-import" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]"><div class="bg-white p-6 rounded-xl shadow-2xl text-center"><p class="font-bold text-lg mb-2">Sucesso!</p><p class="text-gray-600">Dados restaurados com sucesso!</p><button onclick="document.getElementById('msg-box-import').remove()" class="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm">OK</button></div></div>`);
-                                onClose();
-                            }
+                             onClose();
+                             showMessage("Restaurar Dados", `Encontrados ${importedLogs.length} registros.\n\nISSO SUBSTITUIRÁ SEUS DADOS ATUAIS.\n\nDeseja continuar?`, 'confirm', 
+                                 () => {
+                                     StorageService.importLogs(importedLogs);
+                                     onImportSuccess();
+                                     showMessage("Sucesso!", "Dados restaurados com sucesso!", "success");
+                                 }
+                             );
                         } else {
-                            // Usando uma div modal simples em vez de alert()
-                             document.getElementById('root').insertAdjacentHTML('beforeend', `<div id="msg-box-err" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]"><div class="bg-white p-6 rounded-xl shadow-2xl text-center"><p class="font-bold text-lg mb-2 text-red-600">Erro!</p><p class="text-gray-600">Arquivo JSON inválido ou com erros de leitura.</p><button onclick="document.getElementById('msg-box-err').remove()" class="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm">OK</button></div></div>`);
+                             showMessage("Erro", "Arquivo JSON inválido ou corrompido.", "error");
                         }
                     } catch (err) { 
-                        document.getElementById('root').insertAdjacentHTML('beforeend', `<div id="msg-box-err2" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]"><div class="bg-white p-6 rounded-xl shadow-2xl text-center"><p class="font-bold text-lg mb-2 text-red-600">Erro!</p><p class="text-gray-600">Erro ao processar o arquivo.</p><button onclick="document.getElementById('msg-box-err2').remove()" class="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm">OK</button></div></div>`);
+                        showMessage("Erro", "Erro ao processar o arquivo.", "error");
                     }
                 };
                 reader.readAsText(file);
@@ -368,7 +432,7 @@
                                 <Brain className="w-3 h-3 mr-1" /> Configuração da IA
                             </h4>
                             <p className="text-xs text-gray-600 mb-3">
-                                Insira sua chave API para utilizar o Coach IA e o Gerador de Dicas. Suporta Gemini e outros modelos compatíveis com a mesma API URL.
+                                Insira sua chave API para utilizar o Coach IA e o Gerador de Dicas. Suporta Gemini e outros modelos compatíveis.
                             </p>
                             <div className="text-xs text-gray-600 mb-3">
                                 {isUsingDefault 
@@ -404,19 +468,118 @@
         }
 
         // --- DASHBOARD (METRICS) ---
-        function MetricsSection({ logs, apiKey, onDelete, onUpdate }) {
+        function MetricsSection({ logs, apiKey, onDelete, onUpdate, showMessage }) {
             const [view, setView] = useState('dashboard');
+            const [dashboardView, setDashboardView] = useState('strength'); // strength | cardio
             const [analysis, setAnalysis] = useState('');
             const [loading, setLoading] = useState(false);
             const [editingLog, setEditingLog] = useState(null);
+            
+            // Filtros do Histórico
+            const [searchTerm, setSearchTerm] = useState('');
+            const [sortOrder, setSortOrder] = useState('dateDesc'); 
 
-            // Calcula o Heatmap de constância (últimos 30 dias)
+            const strengthLogs = useMemo(() => logs.filter(l => !isCardio(l.muscleGroup)), [logs]);
+            const cardioLogs = useMemo(() => logs.filter(l => isCardio(l.muscleGroup)), [logs]);
+
+            // --------------------------------------------------------
+            // CÁLCULOS DE PROGRESSÃO (FORÇA)
+            // --------------------------------------------------------
+            const getProgressionStats = (filteredLogs) => {
+                const maxWeightByExercise = {};
+                filteredLogs.forEach(l => {
+                    const key = `${l.exercise} (${l.variation})`;
+                    const currentWeight = l.weight || 0;
+                    const currentReps = l.reps || 0;
+
+                    // PR: Maior Peso, em caso de empate, Maior Repetição
+                    if (!maxWeightByExercise[key] || currentWeight > maxWeightByExercise[key].maxW || (currentWeight === maxWeightByExercise[key].maxW && currentReps > maxWeightByExercise[key].maxR)) {
+                         maxWeightByExercise[key] = { maxW: currentWeight, maxR: currentReps, group: l.muscleGroup, date: parseDate(l.workoutDate), logId: l.id };
+                    }
+                });
+
+                const periods = [{ label: '7 Dias', days: 7 }, { label: '15 Dias', days: 15 }, { label: '1 Mês', days: 30 }];
+
+                const stats = Object.entries(maxWeightByExercise).map(([name, data]) => {
+                    const currentPR = data.maxW;
+                    
+                    const progression = periods.map(period => {
+                        const pastDate = new Date();
+                        pastDate.setDate(pastDate.getDate() - period.days);
+                        
+                        let pastMaxW = 0;
+                        filteredLogs.forEach(l => {
+                            const logKey = `${l.exercise} (${l.variation})`;
+                            if (logKey === name) {
+                                const logDate = parseDate(l.workoutDate);
+                                // FIX: Usando .getTime() para comparação robusta
+                                if (logDate.getTime() < pastDate.getTime()) { 
+                                    if ((l.weight || 0) > pastMaxW) {
+                                        pastMaxW = (l.weight || 0);
+                                    }
+                                }
+                            }
+                        });
+
+                        const diff = currentPR - pastMaxW;
+                        const percent = pastMaxW > 0 ? (diff / pastMaxW) * 100 : (diff > 0 ? 100 : 0);
+
+                        return { ...period, diff: parseFloat(diff.toFixed(1)), percent: parseFloat(percent.toFixed(1)) };
+                    });
+
+                    return { name, currentPR, group: data.group, progression, reps: data.maxR, date: data.date.toLocaleDateString('pt-BR') };
+                }).sort((a, b) => b.currentPR - a.currentPR); 
+
+                return stats;
+            };
+            
+            const allStrengthPrs = useMemo(() => getProgressionStats(strengthLogs), [strengthLogs]);
+            const progressionStats = useMemo(() => allStrengthPrs.slice(0, 5), [allStrengthPrs]); 
+
+            // --------------------------------------------------------
+            // CÁLCULOS DE PROGRESSÃO (CARDIO)
+            // --------------------------------------------------------
+            const getCardioProgressionStats = (filteredLogs) => {
+                const maxMetricByExercise = {};
+
+                filteredLogs.forEach(l => {
+                    const key = `${l.exercise} (${l.variation})`;
+                    const currentDistance = l.distance || 0;
+                    const currentTime = l.time || 0;
+                    
+                    // Métrica principal: Maior Distância (km). Desempate: Menor Tempo.
+                    if (currentDistance > 0 && currentTime > 0) {
+                        if (!maxMetricByExercise[key] || 
+                            currentDistance > maxMetricByExercise[key].maxD || 
+                            (currentDistance === maxMetricByExercise[key].maxD && currentTime < maxMetricByExercise[key].time)) {
+                            
+                            maxMetricByExercise[key] = { maxD: currentDistance, time: currentTime, group: l.muscleGroup, date: l.workoutDate };
+                        }
+                    }
+                });
+                
+                // Formata e ordena por Distância Máxima
+                const combined = Object.entries(maxMetricByExercise).map(([name, data]) => ({
+                    name, 
+                    metric: data.maxD, 
+                    unit: 'km', 
+                    time: data.time, 
+                    group: data.group, 
+                    date: parseDate(data.date).toLocaleDateString('pt-BR')
+                })).sort((a, b) => b.metric - a.metric);
+
+                return combined;
+            };
+            
+            const allCardioPrs = useMemo(() => getCardioProgressionStats(cardioLogs), [cardioLogs]);
+            
+            // Heatmap de constância (últimos 28 dias)
             const heatmapData = useMemo(() => {
                 const days = [];
                 const today = new Date();
                 const offset = today.getTimezoneOffset() * 60000;
                 
-                for (let i = 27; i >= 0; i--) { // 28 dias para um bom layout 7x4
+                for (let i = 27; i >= 0; i--) { 
                     const d = new Date(today.getTime() - (i * 86400000) - offset);
                     const dateStr = d.toISOString().split('T')[0];
                     const count = logs.filter(l => l.workoutDate === dateStr).length;
@@ -438,54 +601,57 @@
                     .sort((a,b) => b.count - a.count);
             }, [logs]);
 
-            // Top PRs
-            const prs = useMemo(() => {
-                const map = {};
-                logs.forEach(l => {
-                    const key = `${l.exercise} ${l.variation}`;
-                    // Atualiza o PR se for um peso maior ou se for o mesmo peso com mais repetições
-                    if(!map[key] || l.weight > map[key].maxW || (l.weight === map[key].maxW && l.reps > map[key].maxR)) {
-                         map[key] = { maxW: l.weight, maxR: l.reps, date: l.dateString, group: l.muscleGroup, id: l.id }; 
-                    }
-                });
-                return Object.entries(map).slice(0, 6);
-            }, [logs]);
 
-            // Histórico Agrupado por Data
+            // --------------------------------------------------------
+            // HISTÓRICO AGRUPADO E FILTRADO
+            // --------------------------------------------------------
+            const sortedAndFilteredLogs = useMemo(() => {
+                let filtered = logs.filter(l => 
+                    (l.exercise || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (l.variation || '').toLowerCase().includes(searchTerm.toLowerCase())
+                );
+
+                return filtered.sort((a, b) => {
+                    if (sortOrder === 'dateDesc') return b.createdAt - a.createdAt;
+                    if (sortOrder === 'dateAsc') return a.createdAt - b.createdAt;
+                    
+                    // Ordenação Métrica (Volume de Força ou Métrica de Cardio)
+                    const valA = isCardio(a.muscleGroup) ? (a.distance || 0) - (a.time || 0) * 0.001 : (a.weight || 0) * (a.reps || 0);
+                    const valB = isCardio(b.muscleGroup) ? (b.distance || 0) - (b.time || 0) * 0.001 : (b.weight || 0) * (b.reps || 0);
+                    
+                    if (sortOrder === 'metricDesc') return valB - valA;
+                    if (sortOrder === 'metricAsc') return valA - valB;
+                    
+                    return 0;
+                });
+            }, [logs, searchTerm, sortOrder]);
+
+
             const groupedHistory = useMemo(() => {
                 const groups = {};
-                logs.forEach(l => {
+                sortedAndFilteredLogs.forEach(l => {
                     if(!groups[l.dateString]) groups[l.dateString] = [];
                     groups[l.dateString].push(l);
                 });
-                // Ordenação reversa por data
-                return Object.entries(groups).sort((a,b) => {
-                    // Converte D/M/A para A-M-D para comparação correta
-                    const [dA, mA, yA] = a[0].split('/');
-                    const dateA = `${yA}-${mA}-${dA}`;
-                    const [dB, mB, yB] = b[0].split('/');
-                    const dateB = `${yB}-${mB}-${dB}`;
-                    return dateB.localeCompare(dateA);
-                });
-            }, [logs]);
+                return Object.entries(groups);
+            }, [sortedAndFilteredLogs]);
 
             // Função de Análise da IA
             const analyze = async () => {
                 if(!apiKey || apiKey === DEFAULT_API_KEY) { 
-                    alert("Por favor, insira sua Chave API nas Configurações para usar o Coach IA."); 
+                    showMessage("Chave API Ausente", "Por favor, insira sua Chave API nas Configurações para usar o Coach IA.", "error"); 
                     return; 
                 }
 
-                if (logs.length === 0) {
-                     setAnalysis("Registre alguns treinos primeiro para que o Coach IA possa analisar seu progresso!");
+                if (strengthLogs.length === 0) {
+                     setAnalysis("Registre alguns treinos de força primeiro para que o Coach IA possa analisar seu progresso!");
                      return;
                 }
 
                 setLoading(true);
                 setAnalysis('');
                 try {
-                    // Pega os 30 registros mais recentes
-                    const history = logs.slice(0, 30).map(l => `${l.dateString}: ${l.exercise} (${l.weight}kg x ${l.reps})`).join('\n');
+                    const history = strengthLogs.slice(0, 30).map(l => `${l.dateString}: ${l.exercise} (${l.weight}kg x ${l.reps})`).join('\n');
                     const prompt = `Aja como um treinador pessoal focado em progressão de carga. Analise este histórico de treino recente (registros de peso/repetições) e me dê um feedback curto (máx 3 frases) e motivador sobre a progressão ou consistência. Destaque um ou dois PRs recentes (peso mais alto) se existirem. Histórico:\n${history}`;
                     
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
@@ -501,10 +667,121 @@
                     const data = await res.json();
                     setAnalysis(data.candidates?.[0]?.content?.parts?.[0]?.text || "Erro na análise. Sem resposta.");
                 } catch(e) { 
-                    setAnalysis(`Erro na IA: ${e.message}. Verifique sua chave API e a permissão de domínio.`); 
+                    setAnalysis(`Erro na IA: ${e.message}. Verifique sua chave API.`); 
                 }
                 setLoading(false);
             };
+
+            // Componente de Tabela de Progressão de PR (Força)
+            const ProgressionTable = ({ stats }) => {
+                if (stats.length === 0) return <p className="text-center text-xs text-gray-400 italic py-4">Registre dados de treino de força para ver a progressão.</p>;
+                
+                return (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Exercício (PR)</th>
+                                    {['7 Dias', '15 Dias', '1 Mês'].map(label => (
+                                        <th key={label} className="px-2 py-2 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider">vs {label}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-100">
+                                {stats.map((item, index) => (
+                                    <tr key={index} className="hover:bg-indigo-50/50 transition">
+                                        <td className="px-3 py-3 whitespace-nowrap">
+                                            <div className="font-bold text-gray-800 text-xs line-clamp-2">{item.name.split('(')[0].trim()}</div>
+                                            <div className="text-xs font-black text-indigo-600">{item.currentPR}<span className="text-[10px] text-gray-400 ml-0.5">kg</span></div>
+                                        </td>
+                                        {item.progression.map((p, pIndex) => (
+                                            <td key={pIndex} className="px-2 py-3 whitespace-nowrap text-center">
+                                                <div className={`font-black text-xs ${p.diff > 0 ? 'text-green-600' : p.diff < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                                                    {p.diff > 0 ? `+${p.diff}` : p.diff}kg
+                                                </div>
+                                                <div className={`text-[10px] font-bold ${p.percent > 0 ? 'text-green-500' : p.percent < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                                                    ({p.percent}%)
+                                                </div>
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                );
+            };
+
+            // Componente de Ranking Global de PRs (Força)
+            const StrengthRankingTable = ({ prs }) => {
+                if (prs.length === 0) return <p className="text-center text-xs text-gray-400 italic py-4">Nenhum recorde de força registrado ainda.</p>;
+
+                return (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider w-10"><Hash className="w-3 h-3 mx-auto"/></th>
+                                    <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Exercício (Grupo)</th>
+                                    <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">PR Máximo</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-100">
+                                {prs.map((item, index) => (
+                                    <tr key={item.name} className="hover:bg-yellow-50/50 transition">
+                                        <td className="px-3 py-3 whitespace-nowrap text-center font-black text-lg text-yellow-600">{index + 1}</td>
+                                        <td className="px-3 py-3 whitespace-nowrap">
+                                            <div className="font-bold text-gray-800 text-sm line-clamp-1">{item.name}</div>
+                                            <div className="text-[10px] text-indigo-500 font-semibold uppercase">{item.group}</div>
+                                        </td>
+                                        <td className="px-3 py-3 whitespace-nowrap text-center">
+                                            <div className="font-black text-indigo-700 text-xl leading-none">{item.currentPR}<span className="text-xs font-normal ml-0.5">kg</span></div>
+                                            <div className="text-[10px] text-gray-400 font-bold">{item.reps} reps</div>
+                                            <div className="text-[9px] text-gray-400 mt-1">{item.date}</div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                );
+            };
+            
+            // Componente de Ranking de Cardio
+            const CardioRankingTable = ({ prs }) => {
+                if (prs.length === 0) return <p className="text-center text-xs text-gray-400 italic py-4">Nenhum recorde de Cardio (Distância) registrado ainda.</p>;
+
+                return (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider w-10"><Hash className="w-3 h-3 mx-auto"/></th>
+                                    <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Atividade</th>
+                                    <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Melhor Métrica</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-100">
+                                {prs.map((item, index) => (
+                                    <tr key={item.name} className="hover:bg-emerald-50/50 transition">
+                                        <td className="px-3 py-3 whitespace-nowrap text-center font-black text-lg text-emerald-600">{index + 1}</td>
+                                        <td className="px-3 py-3 whitespace-nowrap">
+                                            <div className="font-bold text-gray-800 text-sm line-clamp-1">{item.name.split('(')[0].trim()}</div>
+                                            <div className="text-[10px] text-gray-500 font-semibold uppercase">{item.group}</div>
+                                        </td>
+                                        <td className="px-3 py-3 whitespace-nowrap text-center">
+                                            <div className="font-black text-emerald-700 text-xl leading-none">{item.metric}<span className="text-xs font-normal ml-0.5">km</span></div>
+                                            <div className="text-[10px] text-gray-400 font-bold">{item.time} min</div>
+                                            <div className="text-[9px] text-gray-400 mt-1">{item.date}</div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                );
+            };
+
 
             return (
                 <div className="animate-slide space-y-6">
@@ -515,26 +792,6 @@
 
                     {view === 'dashboard' ? (
                         <>
-                            {/* Card de Constância (Heatmap) */}
-                            <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
-                                <h3 className="font-bold text-gray-800 mb-4 flex items-center text-sm uppercase tracking-wider"><Flame className="w-4 h-4 mr-2 text-orange-500" fill="currentColor"/> Constância (Últimos 28 dias)</h3>
-                                <div className="grid grid-cols-7 gap-2">
-                                    {heatmapData.map((d, i) => (
-                                        <div 
-                                            key={i} 
-                                            title={d.date}
-                                            className={`aspect-square rounded-md flex items-center justify-center text-[10px] font-bold transition-all hover:scale-110 ${d.count > 0 ? 'text-white shadow-md shadow-indigo-200' : 'bg-gray-100 text-gray-300'}`}
-                                            style={{
-                                                backgroundColor: d.count > 0 ? `rgba(99, 102, 241, ${Math.min(1, d.count * 0.4)})` : undefined, // Escala de cor baseada na contagem
-                                                borderColor: d.count > 0 ? '#6366F1' : '#E5E7EB'
-                                            }}
-                                        >
-                                            {d.dayNum}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            
                             {/* Card Coach IA */}
                             <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-3xl p-5 text-white shadow-lg relative overflow-hidden">
                                 <Brain className="absolute right-0 top-0 w-24 h-24 text-white opacity-10 -mr-6 -mt-6"/>
@@ -550,7 +807,47 @@
                                     </div>
                                 </div>
                             </div>
+                            
+                            {/* Card de Progressão de Carga (FORÇA) */}
+                            <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center text-sm uppercase tracking-wider"><TrendingUp className="w-4 h-4 mr-2 text-green-500" fill="currentColor"/> Progressão de Carga (Força - Top 5)</h3>
+                                <ProgressionTable stats={progressionStats} />
+                            </div>
 
+                            {/* Ranking de Treino - Abas */}
+                            <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+                                <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
+                                    <button onClick={() => setDashboardView('strength')} className={`flex-1 py-1.5 rounded-md text-sm font-bold transition ${dashboardView==='strength'?'bg-indigo-50 shadow text-indigo-600':'text-gray-500'}`}>Força (Peso)</button>
+                                    <button onClick={() => setDashboardView('cardio')} className={`flex-1 py-1.5 rounded-md text-sm font-bold transition ${dashboardView==='cardio'?'bg-emerald-50 shadow text-emerald-600':'text-gray-500'}`}>Cardio (Dist/Tempo)</button>
+                                </div>
+
+                                {dashboardView === 'strength' ? (
+                                    <StrengthRankingTable prs={allStrengthPrs} />
+                                ) : (
+                                    <CardioRankingTable prs={allCardioPrs} />
+                                )}
+                            </div>
+
+                            {/* Card de Constância (Heatmap) */}
+                            <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center text-sm uppercase tracking-wider"><Flame className="w-4 h-4 mr-2 text-orange-500" fill="currentColor"/> Constância (Últimos 28 dias)</h3>
+                                <div className="grid grid-cols-7 gap-2">
+                                    {heatmapData.map((d, i) => (
+                                        <div 
+                                            key={i} 
+                                            title={d.date}
+                                            className={`aspect-square rounded-md flex items-center justify-center text-[10px] font-bold transition-all hover:scale-110 ${d.count > 0 ? 'text-white shadow-md shadow-indigo-200' : 'bg-gray-100 text-gray-300'}`}
+                                            style={{
+                                                backgroundColor: d.count > 0 ? `rgba(99, 102, 241, ${Math.min(1, d.count * 0.4)})` : undefined, 
+                                                borderColor: d.count > 0 ? '#6366F1' : '#E5E7EB'
+                                            }}
+                                        >
+                                            {d.dayNum}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            
                             {/* Card Foco Muscular */}
                             <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
                                 <h3 className="font-bold text-gray-800 mb-4 flex items-center text-sm uppercase tracking-wider"><LayoutGrid className="w-4 h-4 mr-2 text-indigo-500"/> Foco Muscular (Distribuição)</h3>
@@ -569,34 +866,36 @@
                                     {muscleStats.length === 0 && <p className="text-center text-xs text-gray-400">Nenhum dado registrado.</p>}
                                 </div>
                             </div>
-                            
-                            {/* Card Top Recordes */}
-                            <div>
-                                <h3 className="font-bold text-gray-800 mb-3 ml-1 text-sm uppercase tracking-wider">Top Recordes (PRs)</h3>
-                                <div className="grid grid-cols-2 gap-3">
-                                    {prs.map(([name, data]) => (
-                                        <div key={name} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between hover:border-indigo-100 transition">
-                                            <div>
-                                                <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-wide bg-indigo-50 px-1.5 py-0.5 rounded">{data.group}</span>
-                                                <h4 className="font-bold text-gray-800 text-xs leading-tight mt-2 mb-2 line-clamp-2">{name.split(' ')[0]}</h4>
-                                            </div>
-                                            <div className="flex items-end justify-between border-t border-gray-50 pt-2 mt-1">
-                                                <div className="text-xl font-black text-gray-900">{data.maxW}<span className="text-xs font-normal text-gray-400 ml-0.5">kg</span></div>
-                                                <div className="text-[10px] text-gray-400">{data.maxR} reps</div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {prs.length === 0 && (
-                                        <div className="col-span-2 text-center text-xs text-gray-400 p-4 bg-white rounded-xl italic">
-                                            Ainda não há PRs. Registre seu primeiro treino!
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
                         </>
                     ) : (
-                        // Histórico Detalhado
-                        <div className="space-y-8 pb-10">
+                        // Histórico Detalhado (Com Filtros e Ordenação)
+                        <div className="space-y-6 pb-10">
+                            <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 space-y-3">
+                                <div className="relative">
+                                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Filtrar por exercício ou variação..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="w-full p-2 pl-9 border border-gray-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-indigo-300"
+                                    />
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-500 font-medium">Ordenar por:</span>
+                                    <select 
+                                        value={sortOrder}
+                                        onChange={(e) => setSortOrder(e.target.value)}
+                                        className="p-1.5 border border-gray-200 rounded-lg text-sm bg-white font-bold outline-none"
+                                    >
+                                        <option value="dateDesc">Mais Recente</option>
+                                        <option value="dateAsc">Mais Antigo</option>
+                                        <option value="metricDesc">Maior Métrica (Carga/Dist)</option>
+                                        <option value="metricAsc">Menor Métrica</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             {groupedHistory.map(([date, items]) => (
                                 <div key={date} className="relative pl-6 border-l-2 border-indigo-100">
                                     <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-indigo-500 border-4 border-white shadow-sm"></div>
@@ -610,12 +909,21 @@
                                                 </div>
                                                 <div className="flex items-center space-x-3">
                                                     <div className="text-right">
-                                                        <div className="font-bold text-indigo-600 text-base">{log.weight}kg</div>
-                                                        <div className="text-[10px] text-gray-400">{log.reps} reps</div>
+                                                        {isCardio(log.muscleGroup) ? (
+                                                            <>
+                                                                <div className="font-bold text-emerald-600 text-base">{log.time || 0}<span className="text-xs font-normal ml-0.5">min</span></div>
+                                                                <div className="text-[10px] text-gray-400">{log.distance || 0} km</div>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <div className="font-bold text-indigo-600 text-base">{log.weight || 0}kg</div>
+                                                                <div className="text-[10px] text-gray-400">{log.reps || 0} reps</div>
+                                                            </>
+                                                        )}
                                                     </div>
                                                     <div className="flex flex-col space-y-1">
                                                         <button onClick={()=>setEditingLog(log)} className="p-1.5 bg-blue-50 text-blue-500 rounded-lg hover:bg-blue-100"><Pencil className="w-3 h-3"/></button>
-                                                        <button onClick={()=>onDelete(log.createdAt)} className="p-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"><Trash2 className="w-3 h-3"/></button>
+                                                        <button onClick={()=>onDelete(log)} className="p-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"><Trash2 className="w-3 h-3"/></button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -623,7 +931,7 @@
                                     </div>
                                 </div>
                             ))}
-                            {groupedHistory.length === 0 && <div className="text-center text-gray-400 py-10 italic">Nenhum treino registrado ainda.</div>}
+                            {groupedHistory.length === 0 && <div className="text-center text-gray-400 py-10 italic">Nenhum treino encontrado com o filtro atual.</div>}
                         </div>
                     )}
                     {editingLog && (
@@ -633,16 +941,20 @@
             );
         }
 
-        // --- EDIT MODAL (MANTIDO) ---
+        // --- EDIT MODAL (Estável) ---
         function EditLogModal({ log, onClose, onSave }) {
-            const [weight, setWeight] = useState(log.weight);
-            const [reps, setReps] = useState(log.reps);
+            const [weight, setWeight] = useState(log.weight || '');
+            const [reps, setReps] = useState(log.reps || '');
+            const [time, setTime] = useState(log.time || '');
+            const [distance, setDistance] = useState(log.distance || '');
+
             const [date, setDate] = useState(log.workoutDate);
             const [group, setGroup] = useState(log.muscleGroup);
             const [type, setType] = useState(log.exercise);
             const [variation, setVariation] = useState(log.variation);
 
-            // Garante que o exercício e variação sejam válidos ao mudar o grupo
+            const isNewCardio = isCardio(group);
+
             useEffect(() => {
                 if (group && EXERCISE_CATALOG[group] && !EXERCISE_CATALOG[group][type]) { 
                     setType(''); 
@@ -652,10 +964,27 @@
 
             const handleSave = () => {
                 const [y, m, d] = date.split('-');
+                let updatedMetrics = {};
+
+                if (isNewCardio) {
+                    updatedMetrics = { 
+                        weight: null, 
+                        reps: null, 
+                        time: parseFloat(time) || 0, 
+                        distance: parseFloat(distance) || 0 
+                    };
+                } else {
+                    updatedMetrics = { 
+                        weight: parseFloat(weight) || 0, 
+                        reps: parseInt(reps) || 0, 
+                        time: null, 
+                        distance: null 
+                    };
+                }
+                
                 onSave({
                     ...log, 
-                    weight: parseFloat(weight), 
-                    reps: parseInt(reps), 
+                    ...updatedMetrics,
                     workoutDate: date, 
                     dateString: `${d}/${m}/${y}`, 
                     muscleGroup: group, 
@@ -704,8 +1033,17 @@
                             </div>
 
                             <div className="grid grid-cols-2 gap-3">
-                                <Input label="Carga (kg)" type="number" value={weight} onChange={e=>setWeight(e.target.value)} />
-                                <Input label="Reps" type="number" value={reps} onChange={e=>setReps(e.target.value)} />
+                                {isNewCardio ? (
+                                    <>
+                                        <Input label="Tempo (min)" type="number" value={time} onChange={e=>setTime(e.target.value)} icon={Clock} />
+                                        <Input label="Distância (km)" type="number" value={distance} onChange={e=>setDistance(e.target.value)} step="0.1" icon={Route} />
+                                    </>
+                                ) : (
+                                    <>
+                                        <Input label="Carga (kg)" type="number" value={weight} onChange={e=>setWeight(e.target.value)} />
+                                        <Input label="Reps" type="number" value={reps} onChange={e=>setReps(e.target.value)} />
+                                    </>
+                                )}
                             </div>
                         </div>
 
@@ -715,20 +1053,25 @@
             );
         }
 
-        // --- LOGGER (REGISTRO) ---
-        function LoggerSection({ onUpdateLogs, apiKey }) {
+        // --- LOGGER (REGISTRO) (Estável) ---
+        function LoggerSection({ onUpdateLogs, apiKey, showMessage }) {
             const [date, setDate] = useState(getLocalTodayDate());
             const [group, setGroup] = useState('');
             const [type, setType] = useState('');
             const [variation, setVariation] = useState('');
+            
             const [weight, setWeight] = useState('');
             const [reps, setReps] = useState('');
+            const [time, setTime] = useState('');
+            const [distance, setDistance] = useState('');
+
             const [showTips, setShowTips] = useState(false);
             const [tipLoading, setTipLoading] = useState(false);
             const [tipContent, setTipContent] = useState('');
             const [altContent, setAltContent] = useState('');
-            
-            // Reseta estados de exercício e IA ao mudar grupo/tipo
+
+            const isCurrentCardio = isCardio(group);
+
             useEffect(() => { setType(''); setVariation(''); setTipContent(''); setAltContent(''); setShowTips(false); }, [group]);
             useEffect(() => { 
                 if(group && type && EXERCISE_CATALOG[group] && EXERCISE_CATALOG[group][type]) {
@@ -737,15 +1080,13 @@
                 setTipContent(''); setAltContent(''); setShowTips(false);
             }, [type]);
 
-            // Função para buscar dicas de execução (Análise/Orientação)
-            const fetchTips = async () => {
-                if(!apiKey || apiKey === DEFAULT_API_KEY) { 
-                    alert("Por favor, insira sua Chave API nas Configurações para usar as Dicas de Execução."); 
-                    return; 
-                }
+            const fetchTips = async () => { 
+                if(!apiKey || apiKey === DEFAULT_API_KEY) { showMessage("Chave API Ausente", "Por favor, insira sua Chave API nas Configurações para usar as Dicas de Execução.", "error"); return; }
+                if(isCurrentCardio) { setTipContent("Dicas de execução não se aplicam a Cardio da mesma forma. Registre apenas a performance!"); return; }
+
                 setShowTips(true);
                 setAltContent(''); 
-                if(tipContent) return; // Se já buscou, apenas mostra
+                if(tipContent) return; 
 
                 setTipLoading(true);
                 try {
@@ -761,15 +1102,13 @@
                 setTipLoading(false);
             };
 
-            // Função para buscar alternativa (Análise/Orientação)
-            const fetchAlternative = async () => {
-                if(!apiKey || apiKey === DEFAULT_API_KEY) { 
-                    alert("Por favor, insira sua Chave API nas Configurações para usar as Sugestões de Alternativas."); 
-                    return; 
-                }
+            const fetchAlternative = async () => { 
+                if(!apiKey || apiKey === DEFAULT_API_KEY) { showMessage("Chave API Ausente", "Por favor, insira sua Chave API nas Configurações para usar as Sugestões de Alternativas.", "error"); return; }
+                if(isCurrentCardio) { setAltContent("Alternativas não são fornecidas para Cardio. Escolha na lista ou registre a performance!"); return; }
+
                 setShowTips(true);
                 setTipContent('');
-                if(altContent) return; // Se já buscou, apenas mostra
+                if(altContent) return;
 
                 setTipLoading(true);
                 try {
@@ -788,24 +1127,35 @@
 
             const handleSave = (e) => {
                 e.preventDefault();
-                // Validação mínima
-                if (!variation || !weight || parseFloat(weight) <= 0 || !reps || parseInt(reps) <= 0) {
-                    alert("Preencha o grupo, exercício, variação, carga e repetições.");
+                let logData = {};
+                let isValid = false;
+
+                if (isCurrentCardio) {
+                    isValid = (variation && (parseFloat(time) > 0 || parseFloat(distance) > 0));
+                    logData = { weight: null, reps: null, time: parseFloat(time) || 0, distance: parseFloat(distance) || 0 };
+                } else {
+                    isValid = (variation && parseFloat(weight) > 0 && parseInt(reps) > 0);
+                    logData = { weight: parseFloat(weight) || 0, reps: parseInt(reps) || 0, time: null, distance: null };
+                }
+
+                if (!isValid) {
+                    showMessage("Campos Inválidos", "Preencha todos os campos obrigatórios (Carga/Reps ou Tempo/Distância) e selecione o exercício.", "error");
                     return;
                 }
 
                 const [y, m, d] = date.split('-');
                 const log = {
-                    id: Date.now(), muscleGroup: group, exercise: type, variation, weight: parseFloat(weight), reps: parseInt(reps),
-                    workoutDate: date, dateString: `${d}/${m}/${y}`, createdAt: Date.now()
+                    id: Date.now(), muscleGroup: group, exercise: type, variation, 
+                    workoutDate: date, dateString: `${d}/${m}/${y}`, createdAt: Date.now(),
+                    ...logData
                 };
                 onUpdateLogs(StorageService.saveLog(log));
                 
-                // Reseta campos de peso e reps
-                setWeight(''); setReps('');
+                // Reseta campos
+                setWeight(''); setReps(''); setTime(''); setDistance('');
+                showMessage("Registro Salvo!", `${isCurrentCardio ? 'Cardio' : 'Série'} registrada com sucesso.`, "success");
             };
 
-            // Helpers para renderização segura
             const exerciseOptions = (group && EXERCISE_CATALOG[group]) ? Object.keys(EXERCISE_CATALOG[group]) : [];
             const variationOptions = (group && type && EXERCISE_CATALOG[group]?.[type]) ? EXERCISE_CATALOG[group][type] : [];
 
@@ -841,8 +1191,8 @@
                             </div>
                         )}
 
-                        {/* BOTÕES DE IA (Dicas e Alternativas - Análise de Treino/Orientação) */}
-                        {type && variation && (
+                        {/* BOTÕES DE IA (Só se aplicam a treino de força) */}
+                        {type && variation && !isCurrentCardio && (
                             <div className="mt-2">
                                 <div className="flex gap-3">
                                     <button type="button" onClick={fetchTips} className="text-xs flex items-center text-indigo-500 font-bold hover:text-indigo-700 transition bg-indigo-50 px-2 py-1 rounded-lg">
@@ -870,11 +1220,21 @@
                             </div>
                         )}
 
+                        {/* Renderização Condicional de Métricas */}
                         <div className="grid grid-cols-2 gap-3 pt-2">
-                            <Input label="Carga (kg)" type="number" value={weight} onChange={e=>setWeight(e.target.value)} placeholder="0" step="0.5" min="0" />
-                            <Input label="Reps" type="number" value={reps} onChange={e=>setReps(e.target.value)} placeholder="0" min="1" />
+                            {isCurrentCardio ? (
+                                <>
+                                    <Input label="Tempo (min)" type="number" value={time} onChange={e=>setTime(e.target.value)} placeholder="0" min="0" step="1" icon={Clock} />
+                                    <Input label="Distância (km)" type="number" value={distance} onChange={e=>setDistance(e.target.value)} placeholder="0" min="0" step="0.1" icon={Route} />
+                                </>
+                            ) : (
+                                <>
+                                    <Input label="Carga (kg)" type="number" value={weight} onChange={e=>setWeight(e.target.value)} placeholder="0" step="0.5" min="0" />
+                                    <Input label="Reps" type="number" value={reps} onChange={e=>setReps(e.target.value)} placeholder="0" min="1" />
+                                </>
+                            )}
                         </div>
-                        <button disabled={!variation || !weight || !reps} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:shadow-none active:scale-95 transition mt-4">
+                        <button disabled={!variation || (isCurrentCardio ? (!time && !distance) : (!weight || !reps))} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:shadow-none active:scale-95 transition mt-4">
                             CONFIRMAR SÉRIE
                         </button>
                     </form>
@@ -882,7 +1242,7 @@
             );
         }
         
-        // --- COMPONENTES AUXILIARES (MANTIDOS) ---
+        // --- COMPONENTES AUXILIARES ---
         const Select = ({ label, value, onChange, options }) => (
             <div className="relative">
                 <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">{label}</label>
@@ -893,10 +1253,13 @@
                 <ChevronDown className="absolute right-3 top-8 text-gray-400 w-4 h-4 pointer-events-none"/>
             </div>
         );
-        const Input = ({ label, ...props }) => (
+        const Input = ({ label, icon: Icon, ...props }) => (
             <div>
                 <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">{label}</label>
-                <input {...props} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-center font-bold text-lg outline-none focus:ring-2 focus:ring-indigo-200 transition text-gray-800" />
+                <div className="relative">
+                    {Icon && <Icon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>}
+                    <input {...props} className={`w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-center font-bold text-lg outline-none focus:ring-2 focus:ring-indigo-200 transition text-gray-800 ${Icon ? 'pl-8 pr-3' : 'px-3'}`} />
+                </div>
             </div>
         );
 
