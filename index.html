@@ -20,9 +20,25 @@
         }
         
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes slideDown { 
+            from { max-height: 0; opacity: 0; overflow: hidden; } 
+            to { max-height: 2000px; opacity: 1; overflow: auto; } /* Valor alto para garantir expansão */
+        }
         .animate-fade { animation: fadeIn 0.4s ease-out; }
-        .animate-slide { animation: slideUp 0.4s ease-out; }
+        
+        /* Classes de Expansão para o CollapsibleCard */
+        .is-expanded {
+             max-height: 2000px; /* Garante que o conteúdo caiba */
+             opacity: 1;
+             overflow: visible; /* Pode ser auto/visible dependendo do conteúdo, mas visible para que as sombras não sejam cortadas */
+             transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+        }
+        .is-collapsed {
+             max-height: 0;
+             opacity: 0;
+             overflow: hidden;
+             transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+        }
         
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -49,7 +65,7 @@
         import React, { useState, useEffect, useMemo, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
         // Ícones necessários
-        import { BarChart2, Plus, Trash2, Pencil, Trophy, Sparkles, Brain, X, Settings, Download, Upload, Flame, LayoutGrid, ChevronDown, RefreshCw, TrendingUp, Hash, Clock, Route, Search, AlertTriangle } from 'lucide-react';
+        import { BarChart2, Plus, Trash2, Pencil, Trophy, Sparkles, Brain, X, Settings, Download, Upload, Flame, LayoutGrid, ChevronDown, RefreshCw, TrendingUp, Hash, Clock, Route, Search, AlertTriangle, ChevronUp } from 'lucide-react';
 
         // --- CONSTANTES ---
         const DEFAULT_API_KEY = "AIzaSyCZgPRLTn0OQZHB4rIj6bnWfrXTKRSWra0"; 
@@ -255,6 +271,37 @@
                         ) : (
                             <button onClick={handleCancel} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl hover:bg-indigo-700 transition">Entendi</button>
                         )}
+                    </div>
+                </div>
+            );
+        }
+
+        // --- COMPONENTE COLAPSÁVEL GENÉRICO ---
+        function CollapsibleCard({ title, icon: Icon, iconColor, children, initialCollapsed = true }) {
+            const [isCollapsed, setIsCollapsed] = useState(initialCollapsed);
+            const contentRef = useRef(null);
+
+            // Nota: O Tailwind 'group' é aplicado na div principal para suportar o estado de hover no botão.
+            return (
+                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden group">
+                    <button 
+                        onClick={() => setIsCollapsed(!isCollapsed)}
+                        className="w-full p-5 flex justify-between items-center text-left hover:bg-gray-50 transition"
+                    >
+                        <h3 className="font-bold text-gray-800 flex items-center text-sm uppercase tracking-wider">
+                            <Icon className={`w-4 h-4 mr-2 ${iconColor}`} fill="currentColor"/> 
+                            {title}
+                        </h3>
+                        <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
+                    </button>
+                    {/* O uso de classes CSS garante a animação de colapso/expansão */}
+                    <div 
+                        ref={contentRef}
+                        className={isCollapsed ? 'is-collapsed' : 'is-expanded'}
+                    >
+                        <div className="px-5 pb-5">
+                            {children}
+                        </div>
                     </div>
                 </div>
             );
@@ -471,6 +518,8 @@
         function MetricsSection({ logs, apiKey, onDelete, onUpdate, showMessage }) {
             const [view, setView] = useState('dashboard');
             const [dashboardView, setDashboardView] = useState('strength'); // strength | cardio
+            const [showFullRankingStrength, setShowFullRankingStrength] = useState(false);
+            const [showFullRankingCardio, setShowFullRankingCardio] = useState(false);
             const [analysis, setAnalysis] = useState('');
             const [loading, setLoading] = useState(false);
             const [editingLog, setEditingLog] = useState(null);
@@ -494,6 +543,7 @@
 
                     // PR: Maior Peso, em caso de empate, Maior Repetição
                     if (!maxWeightByExercise[key] || currentWeight > maxWeightByExercise[key].maxW || (currentWeight === maxWeightByExercise[key].maxW && currentReps > maxWeightByExercise[key].maxR)) {
+                         // *** CORRIGIDO: currentRps -> currentReps (Era a causa do erro de renderização) ***
                          maxWeightByExercise[key] = { maxW: currentWeight, maxR: currentReps, group: l.muscleGroup, date: parseDate(l.workoutDate), logId: l.id };
                     }
                 });
@@ -651,6 +701,7 @@
                 setLoading(true);
                 setAnalysis('');
                 try {
+                    // Prepara histórico para a IA
                     const history = strengthLogs.slice(0, 30).map(l => `${l.dateString}: ${l.exercise} (${l.weight}kg x ${l.reps})`).join('\n');
                     const prompt = `Aja como um treinador pessoal focado em progressão de carga. Analise este histórico de treino recente (registros de peso/repetições) e me dê um feedback curto (máx 3 frases) e motivador sobre a progressão ou consistência. Destaque um ou dois PRs recentes (peso mais alto) se existirem. Histórico:\n${history}`;
                     
@@ -713,78 +764,124 @@
             };
 
             // Componente de Ranking Global de PRs (Força)
-            const StrengthRankingTable = ({ prs }) => {
-                if (prs.length === 0) return <p className="text-center text-xs text-gray-400 italic py-4">Nenhum recorde de força registrado ainda.</p>;
+            const StrengthRankingTable = ({ prs, showFullRanking, setShowFullRanking }) => {
+                const totalItems = prs.length;
+                const topN = 3;
+                const itemsToShow = showFullRanking ? prs : prs.slice(0, topN);
+
+                if (totalItems === 0) return <p className="text-center text-xs text-gray-400 italic py-4">Nenhum recorde de força registrado ainda.</p>;
 
                 return (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider w-10"><Hash className="w-3 h-3 mx-auto"/></th>
-                                    <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Exercício (Grupo)</th>
-                                    <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">PR Máximo</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-100">
-                                {prs.map((item, index) => (
-                                    <tr key={item.name} className="hover:bg-yellow-50/50 transition">
-                                        <td className="px-3 py-3 whitespace-nowrap text-center font-black text-lg text-yellow-600">{index + 1}</td>
-                                        <td className="px-3 py-3 whitespace-nowrap">
-                                            <div className="font-bold text-gray-800 text-sm line-clamp-1">{item.name}</div>
-                                            <div className="text-[10px] text-indigo-500 font-semibold uppercase">{item.group}</div>
-                                        </td>
-                                        <td className="px-3 py-3 whitespace-nowrap text-center">
-                                            <div className="font-black text-indigo-700 text-xl leading-none">{item.currentPR}<span className="text-xs font-normal ml-0.5">kg</span></div>
-                                            <div className="text-[10px] text-gray-400 font-bold">{item.reps} reps</div>
-                                            <div className="text-[9px] text-gray-400 mt-1">{item.date}</div>
-                                        </td>
+                    <>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider w-10"><Hash className="w-3 h-3 mx-auto"/></th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Exercício (Grupo)</th>
+                                        <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">PR Máximo</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-100">
+                                    {itemsToShow.map((item, index) => (
+                                        <tr key={item.name} className={`transition ${index < topN ? 'bg-yellow-50/50' : 'hover:bg-gray-50'}`}>
+                                            <td className="px-3 py-3 whitespace-nowrap text-center font-black text-lg text-yellow-600">{index + 1}</td>
+                                            <td className="px-3 py-3 whitespace-nowrap">
+                                                <div className="font-bold text-gray-800 text-sm line-clamp-1">{item.name}</div>
+                                                <div className="text-[10px] text-indigo-500 font-semibold uppercase">{item.group}</div>
+                                            </td>
+                                            <td className="px-3 py-3 whitespace-nowrap text-center">
+                                                <div className="font-black text-indigo-700 text-xl leading-none">{item.currentPR}<span className="text-xs font-normal ml-0.5">kg</span></div>
+                                                <div className="text-[10px] text-gray-400 font-bold">{item.reps} reps</div>
+                                                <div className="text-[9px] text-gray-400 mt-1">{item.date}</div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {totalItems > topN && (
+                            <button 
+                                onClick={() => setShowFullRanking(!showFullRanking)}
+                                className="w-full text-center text-xs font-bold mt-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition flex items-center justify-center space-x-1"
+                            >
+                                {showFullRanking ? (
+                                    <>
+                                        <ChevronUp className="w-3 h-3"/> <span>Mostrar Top {topN}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <ChevronDown className="w-3 h-3"/> <span>Mostrar os outros {totalItems - topN} recordes</span>
+                                    </>
+                                )}
+                            </button>
+                        )}
+                    </>
                 );
             };
             
             // Componente de Ranking de Cardio
-            const CardioRankingTable = ({ prs }) => {
-                if (prs.length === 0) return <p className="text-center text-xs text-gray-400 italic py-4">Nenhum recorde de Cardio (Distância) registrado ainda.</p>;
+            const CardioRankingTable = ({ prs, showFullRanking, setShowFullRanking }) => {
+                const totalItems = prs.length;
+                const topN = 3;
+                const itemsToShow = showFullRanking ? prs : prs.slice(0, topN);
+
+                if (totalItems === 0) return <p className="text-center text-xs text-gray-400 italic py-4">Nenhum recorde de Cardio (Distância) registrado ainda.</p>;
 
                 return (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider w-10"><Hash className="w-3 h-3 mx-auto"/></th>
-                                    <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Atividade</th>
-                                    <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Melhor Métrica</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-100">
-                                {prs.map((item, index) => (
-                                    <tr key={item.name} className="hover:bg-emerald-50/50 transition">
-                                        <td className="px-3 py-3 whitespace-nowrap text-center font-black text-lg text-emerald-600">{index + 1}</td>
-                                        <td className="px-3 py-3 whitespace-nowrap">
-                                            <div className="font-bold text-gray-800 text-sm line-clamp-1">{item.name.split('(')[0].trim()}</div>
-                                            <div className="text-[10px] text-gray-500 font-semibold uppercase">{item.group}</div>
-                                        </td>
-                                        <td className="px-3 py-3 whitespace-nowrap text-center">
-                                            <div className="font-black text-emerald-700 text-xl leading-none">{item.metric}<span className="text-xs font-normal ml-0.5">km</span></div>
-                                            <div className="text-[10px] text-gray-400 font-bold">{item.time} min</div>
-                                            <div className="text-[9px] text-gray-400 mt-1">{item.date}</div>
-                                        </td>
+                    <>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider w-10"><Hash className="w-3 h-3 mx-auto"/></th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Atividade</th>
+                                        <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Melhor Métrica</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-100">
+                                    {itemsToShow.map((item, index) => (
+                                        <tr key={item.name} className={`transition ${index < topN ? 'bg-emerald-50/50' : 'hover:bg-gray-50'}`}>
+                                            <td className="px-3 py-3 whitespace-nowrap text-center font-black text-lg text-emerald-600">{index + 1}</td>
+                                            <td className="px-3 py-3 whitespace-nowrap">
+                                                <div className="font-bold text-gray-800 text-sm line-clamp-1">{item.name.split('(')[0].trim()}</div>
+                                                <div className="text-[10px] text-gray-500 font-semibold uppercase">{item.group}</div>
+                                            </td>
+                                            <td className="px-3 py-3 whitespace-nowrap text-center">
+                                                <div className="font-black text-emerald-700 text-xl leading-none">{item.metric}<span className="text-xs font-normal ml-0.5">km</span></div>
+                                                <div className="text-[10px] text-gray-400 font-bold">{item.time} min</div>
+                                                <div className="text-[9px] text-gray-400 mt-1">{item.date}</div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {totalItems > topN && (
+                            <button 
+                                onClick={() => setShowFullRanking(!showFullRanking)}
+                                className="w-full text-center text-xs font-bold mt-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition flex items-center justify-center space-x-1"
+                            >
+                                {showFullRanking ? (
+                                    <>
+                                        <ChevronUp className="w-3 h-3"/> <span>Mostrar Top {topN}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <ChevronDown className="w-3 h-3"/> <span>Mostrar os outros {totalItems - topN} recordes</span>
+                                    </>
+                                )}
+                            </button>
+                        )}
+                    </>
                 );
             };
 
 
             return (
-                <div className="animate-slide space-y-6">
+                <div className="animate-fade space-y-6">
                     <div className="flex bg-gray-200 p-1 rounded-xl">
                         <button onClick={() => setView('dashboard')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${view==='dashboard'?'bg-white shadow text-indigo-600':'text-gray-500'}`}>Visão Geral</button>
                         <button onClick={() => setView('history')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${view==='history'?'bg-white shadow text-indigo-600':'text-gray-500'}`}>Histórico</button>
@@ -792,7 +889,7 @@
 
                     {view === 'dashboard' ? (
                         <>
-                            {/* Card Coach IA */}
+                            {/* 1. Card Coach IA (Análise de Treino) - SEMPRE VISÍVEL NO TOPO */}
                             <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-3xl p-5 text-white shadow-lg relative overflow-hidden">
                                 <Brain className="absolute right-0 top-0 w-24 h-24 text-white opacity-10 -mr-6 -mt-6"/>
                                 <div className="relative z-10">
@@ -808,27 +905,7 @@
                                 </div>
                             </div>
                             
-                            {/* Card de Progressão de Carga (FORÇA) */}
-                            <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
-                                <h3 className="font-bold text-gray-800 mb-4 flex items-center text-sm uppercase tracking-wider"><TrendingUp className="w-4 h-4 mr-2 text-green-500" fill="currentColor"/> Progressão de Carga (Força - Top 5)</h3>
-                                <ProgressionTable stats={progressionStats} />
-                            </div>
-
-                            {/* Ranking de Treino - Abas */}
-                            <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
-                                <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
-                                    <button onClick={() => setDashboardView('strength')} className={`flex-1 py-1.5 rounded-md text-sm font-bold transition ${dashboardView==='strength'?'bg-indigo-50 shadow text-indigo-600':'text-gray-500'}`}>Força (Peso)</button>
-                                    <button onClick={() => setDashboardView('cardio')} className={`flex-1 py-1.5 rounded-md text-sm font-bold transition ${dashboardView==='cardio'?'bg-emerald-50 shadow text-emerald-600':'text-gray-500'}`}>Cardio (Dist/Tempo)</button>
-                                </div>
-
-                                {dashboardView === 'strength' ? (
-                                    <StrengthRankingTable prs={allStrengthPrs} />
-                                ) : (
-                                    <CardioRankingTable prs={allCardioPrs} />
-                                )}
-                            </div>
-
-                            {/* Card de Constância (Heatmap) */}
+                            {/* 2. Card de Constância (Heatmap) - SEMPRE VISÍVEL */}
                             <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
                                 <h3 className="font-bold text-gray-800 mb-4 flex items-center text-sm uppercase tracking-wider"><Flame className="w-4 h-4 mr-2 text-orange-500" fill="currentColor"/> Constância (Últimos 28 dias)</h3>
                                 <div className="grid grid-cols-7 gap-2">
@@ -848,7 +925,7 @@
                                 </div>
                             </div>
                             
-                            {/* Card Foco Muscular */}
+                            {/* 3. Card Foco Muscular - SEMPRE VISÍVEL */}
                             <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
                                 <h3 className="font-bold text-gray-800 mb-4 flex items-center text-sm uppercase tracking-wider"><LayoutGrid className="w-4 h-4 mr-2 text-indigo-500"/> Foco Muscular (Distribuição)</h3>
                                 <div className="space-y-3">
@@ -865,6 +942,40 @@
                                     ))}
                                     {muscleStats.length === 0 && <p className="text-center text-xs text-gray-400">Nenhum dado registrado.</p>}
                                 </div>
+                            </div>
+                            
+                            {/* 4. Card de Progressão de Carga (FORÇA - TOP 5) - MINIMIZADO */}
+                            <CollapsibleCard 
+                                title="Progressão de Carga (Força - Top 5)" 
+                                icon={TrendingUp} 
+                                iconColor="text-green-500"
+                                initialCollapsed={true}
+                            >
+                                <ProgressionTable stats={progressionStats} />
+                            </CollapsibleCard>
+
+                            {/* 5. Ranking de Recordes - TOP 3 VISÍVEL, RESTANTE EXPANSÍVEL */}
+                            <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center text-sm uppercase tracking-wider"><Trophy className="w-4 h-4 mr-2 text-yellow-500" fill="currentColor"/> Ranking de Recordes (Top 3)</h3>
+
+                                <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
+                                    <button onClick={() => setDashboardView('strength')} className={`flex-1 py-1.5 rounded-md text-sm font-bold transition ${dashboardView==='strength'?'bg-indigo-50 shadow text-indigo-600':'text-gray-500'}`}>Força (Peso)</button>
+                                    <button onClick={() => setDashboardView('cardio')} className={`flex-1 py-1.5 rounded-md text-sm font-bold transition ${dashboardView==='cardio'?'bg-emerald-50 shadow text-emerald-600':'text-gray-500'}`}>Cardio (Dist/Tempo)</button>
+                                </div>
+
+                                {dashboardView === 'strength' ? (
+                                    <StrengthRankingTable 
+                                        prs={allStrengthPrs} 
+                                        showFullRanking={showFullRankingStrength} 
+                                        setShowFullRanking={setShowFullRankingStrength}
+                                    />
+                                ) : (
+                                    <CardioRankingTable 
+                                        prs={allCardioPrs} 
+                                        showFullRanking={showFullRankingCardio} 
+                                        setShowFullRanking={setShowFullRankingCardio}
+                                    />
+                                )}
                             </div>
                         </>
                     ) : (
@@ -1160,7 +1271,7 @@
             const variationOptions = (group && type && EXERCISE_CATALOG[group]?.[type]) ? EXERCISE_CATALOG[group][type] : [];
 
             return (
-                <div className="animate-slide bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+                <div className="animate-fade bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
                     <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center"><Plus className="w-5 h-5 mr-2 text-indigo-500"/> Novo Registro</h2>
                     <form onSubmit={handleSave} className="space-y-4">
                         <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
