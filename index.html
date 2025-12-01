@@ -228,7 +228,7 @@
                 localStorage.setItem(StorageService.KEY_LOGS, JSON.stringify(newLogs));
                 return true;
             },
-            // AJUSTE SOLICITADO: Retorna string vazia se nenhuma chave foi salva, para deixar o campo limpo
+            // Retorna string vazia se nenhuma chave foi salva, para deixar o campo limpo
             getApiKey: () => {
                 const stored = localStorage.getItem(StorageService.KEY_API);
                 if (stored && stored.trim().length > 10) return stored;
@@ -695,11 +695,6 @@
             const analyze = async () => {
                 const resolvedKey = resolveApiKey();
 
-                if(!resolvedKey || resolvedKey === DEFAULT_API_KEY) { 
-                    showMessage("Chave API Ausente", "Por favor, insira sua Chave API nas Configurações para usar o Coach IA.", "error"); 
-                    return; 
-                }
-
                 if (strengthLogs.length === 0) {
                      setAnalysis("Registre alguns treinos de força primeiro para que o Coach IA possa analisar seu progresso!");
                      return;
@@ -711,9 +706,10 @@
                     // Prepara histórico para a IA
                     const history = strengthLogs.slice(0, 30).map(l => `${l.dateString}: ${l.exercise} (${l.weight}kg x ${l.reps})`).join('\n');
                     
-                    // AJUSTE SOLICITADO: Prompt detalhado, enfatizando que os logs são PRs (carga máxima)
+                    // Prompt detalhado, enfatizando que os logs são PRs (carga máxima)
                     const prompt = `Aja como um treinador pessoal focado em progressão de carga. O histórico de treino abaixo contém APENAS o Recorde Pessoal (PR) de carga máxima/repetições de cada exercício por dia, e não todas as séries realizadas. Analise este histórico de PRs recentes e me dê um feedback curto (máx 3 frases) e motivador sobre a progressão ou consistência da carga máxima. Destaque um ou dois PRs recentes (peso mais alto) se existirem. Histórico:\n${history}`;
                     
+                    // Usa a chave resolvida para a chamada
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${resolvedKey}`, {
                         method: 'POST', headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
@@ -1134,7 +1130,7 @@
                             
                             <div className="relative">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Exercício</label>
-                                <select value={type} onChange={e=>{setType(e.target.value); setVariation('');}} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold outline-none appearance-none text-gray-700 text-sm">
+                                <select value={type} onChange={e=>setType(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold outline-none appearance-none text-gray-700 text-sm">
                                     <option value="" disabled>Selecione...</option>
                                     {!exerciseOptions.includes(type) && type && <option value={type}>{type} (Arquivo)</option>}
                                     {exerciseOptions.sort().map(o=><option key={o} value={o}>{o}</option>)}
