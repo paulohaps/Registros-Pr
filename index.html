@@ -20,17 +20,13 @@
         }
         
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideDown { 
-            from { max-height: 0; opacity: 0; overflow: hidden; } 
-            to { max-height: 2000px; opacity: 1; overflow: auto; }
-        }
         .animate-fade { animation: fadeIn 0.4s ease-out; }
         
         /* Classes de Expansão para o CollapsibleCard */
         .is-expanded {
-             max-height: 2000px;
+             max-height: 2000px; 
              opacity: 1;
-             overflow: auto; /* Mais seguro para garantir a exibição */
+             overflow: auto; 
              transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
         }
         .is-collapsed {
@@ -40,6 +36,7 @@
              transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
         }
         
+        /* Estilização da Scrollbar para dispositivos que a exibem */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -68,7 +65,8 @@
         import { BarChart2, Plus, Trash2, Pencil, Trophy, Sparkles, Brain, X, Settings, Download, Upload, Flame, LayoutGrid, ChevronDown, RefreshCw, TrendingUp, Hash, Clock, Route, Search, AlertTriangle, ChevronUp } from 'lucide-react';
 
         // --- CONSTANTES ---
-        const DEFAULT_API_KEY = "AIzaSyCZgPRLTn0OQZHB4rIj6bnWfrXTKRSWra0"; 
+        // Se a chave for vazia (""), o ambiente de execução injeta a chave de trabalho.
+        const DEFAULT_API_KEY = ""; 
 
         // --- UTILITÁRIOS ---
         const getLocalTodayDate = () => {
@@ -80,12 +78,57 @@
         };
         const parseDate = (dateStr) => {
             const [y, m, d] = dateStr.split('-');
-            // Usa UTC para evitar problemas de fuso horário, mas garante que a data seja válida.
             return new Date(Date.UTC(y, m - 1, d));
         };
         const isCardio = (group) => group === 'Cardio';
 
-        // --- CATÁLOGO COMPLETO ---
+        /**
+         * CORREÇÃO CRÍTICA: Função robusta para chamar a API Gemini com Exponential Backoff.
+         * Garante que a chamada funcione mesmo com instabilidades ou limites de taxa.
+         */
+        const callGeminiApi = async (prompt, apiKey, maxRetries = 3) => {
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = { 
+                contents: [{ parts: [{ text: prompt }] }] 
+            };
+
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        return data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    } else {
+                        const errorData = await response.json();
+                        // Se for erro de rate limit ou temporário e não for a última tentativa, tenta novamente
+                        if ((response.status === 429 || response.status >= 500) && i < maxRetries - 1) {
+                             // Lançamento de erro para entrar no catch e acionar o backoff
+                            throw new Error("Retryable Error"); 
+                        }
+                        // Lançamento de erro fatal (ex: chave API inválida, prompt bloqueado)
+                        throw new Error(errorData.error?.message || `Erro HTTP ${response.status}`);
+                    }
+                } catch (error) {
+                    if (error.message === "Retryable Error") {
+                        // Implementação do backoff (2^i segundos + jitter)
+                        const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue; // Próxima iteração do loop (Retry)
+                    }
+                    // Relança o erro fatal para o chamador
+                    throw error; 
+                }
+            }
+            // Se o loop terminar sem sucesso, lança erro de falha total
+            throw new Error("Falha na chamada à IA após várias tentativas.");
+        };
+
+        // --- CATÁLOGO COMPLETO (Omitido para brevidade, mas o conteúdo é o mesmo) ---
         const EXERCISE_CATALOG = {
             "Peitoral": {
                 "Supino Reto": ["Barra Livre", "Halteres", "Smith", "Máquina Vertical", "Máquina Horizontal", "Articulado (Hammer)", "Chão (Floor Press)"],
@@ -184,6 +227,7 @@
             }
         };
 
+
         // --- SERVIÇO DE STORAGE ---
         const StorageService = {
             KEY_LOGS: 'registro_prs_logs_v2',
@@ -217,9 +261,9 @@
                 }
                 return logs;
             },
-            deleteLog: (timestamp) => {
+            deleteLog: (id) => { 
                 const logs = StorageService.getLogs();
-                const newLogs = logs.filter(l => l.createdAt !== timestamp);
+                const newLogs = logs.filter(l => l.id !== id); 
                 localStorage.setItem(StorageService.KEY_LOGS, JSON.stringify(newLogs));
                 return newLogs;
             },
@@ -228,7 +272,6 @@
                 localStorage.setItem(StorageService.KEY_LOGS, JSON.stringify(newLogs));
                 return true;
             },
-            // Retorna string vazia se nenhuma chave foi salva, para deixar o campo limpo
             getApiKey: () => {
                 const stored = localStorage.getItem(StorageService.KEY_API);
                 if (stored && stored.trim().length > 10) return stored;
@@ -282,7 +325,6 @@
             const [isCollapsed, setIsCollapsed] = useState(initialCollapsed);
             const contentRef = useRef(null);
 
-            // Nota: O Tailwind 'group' é aplicado na div principal para suportar o estado de hover no botão.
             return (
                 <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden group">
                     <button 
@@ -295,7 +337,6 @@
                         </h3>
                         <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
                     </button>
-                    {/* O uso de classes CSS garante a animação de colapso/expansão */}
                     <div 
                         ref={contentRef}
                         className={isCollapsed ? 'is-collapsed' : 'is-expanded'}
@@ -317,13 +358,11 @@
             const [modal, setModal] = useState(null); 
 
             useEffect(() => {
-                // Ao iniciar, a API key é lida (pode ser vazia, conforme o ajuste)
                 const keyToUse = StorageService.getApiKey();
                 setLogs(StorageService.getLogs());
                 setApiKey(keyToUse);
             }, []);
             
-            // Função centralizada para exibir modais (incluindo confirm)
             const showMessage = (title, message, type = 'info', onConfirmAction = () => {}, onCloseAction = () => {}) => {
                  setModal({ 
                     title, 
@@ -335,7 +374,6 @@
             }
 
             const handleSaveKey = () => {
-                // Salva o valor atual do input (pode ser vazio)
                 StorageService.setApiKey(apiKey);
                 setShowSettings(false);
                 showMessage("Chave Salva!", "O aplicativo agora usará sua chave API personalizada.", "success");
@@ -346,7 +384,7 @@
                     "Apagar Registro", 
                     `Tem certeza que deseja apagar o registro de ${log.exercise} (${log.dateString})? Esta ação é irreversível.`, 
                     'confirm', 
-                    () => setLogs(StorageService.deleteLog(log.createdAt))
+                    () => setLogs(StorageService.deleteLog(log.id)) 
                 );
             };
 
@@ -358,10 +396,10 @@
 
             const refreshLogs = () => setLogs(StorageService.getLogs());
 
-            // Garante que o DEFAULT_API_KEY seja usado nas chamadas à IA se o campo estiver vazio
+            // Garante que a chave API correta seja usada (vazia para injeção automática se não houver customizada)
             const resolveApiKey = () => {
                 if (apiKey && apiKey.trim().length > 10) return apiKey;
-                return DEFAULT_API_KEY;
+                return DEFAULT_API_KEY; 
             };
 
             return (
@@ -488,11 +526,10 @@
                             <div className="text-xs text-gray-600 mb-3">
                                 {isUsingCustom 
                                     ? <span className="text-blue-600 font-bold">✅ Usando sua chave personalizada</span>
-                                    : <span className="text-red-600 font-bold">⚠️ Usando chave padrão (limitações)</span> 
+                                    : <span className="text-green-600 font-bold">✅ Usando chave padrão (fornecida pelo ambiente)</span> 
                                 }
                             </div>
-                            <label className="block text-xs text-gray-400 mb-1">Chave API (Ex: AIzaSy...)</label>
-                            {/* O input agora reflete o estado vazio se não houver chave salva */}
+                            <label className="block text-xs text-gray-400 mb-1">Chave API (Opcional - Ex: AIzaSy...)</label>
                             <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Chave padrão ativa..." className="w-full p-3 border border-gray-200 rounded-xl mb-2 text-sm font-mono bg-white focus:ring-2 focus:ring-indigo-500 outline-none" />
                             <button onClick={onSave} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm hover:bg-indigo-700 active:scale-95 transition">Salvar Chave</button>
                         </div>
@@ -523,23 +560,21 @@
         // --- DASHBOARD (METRICS) ---
         function MetricsSection({ logs, apiKey, onDelete, onUpdate, showMessage }) {
             const [view, setView] = useState('dashboard');
-            const [dashboardView, setDashboardView] = useState('strength'); // strength | cardio
+            const [dashboardView, setDashboardView] = useState('strength'); 
             const [showFullRankingStrength, setShowFullRankingStrength] = useState(false);
             const [showFullRankingCardio, setShowFullRankingCardio] = useState(false);
             const [analysis, setAnalysis] = useState('');
             const [loading, setLoading] = useState(false);
             const [editingLog, setEditingLog] = useState(null);
             
-            // Filtros do Histórico
             const [searchTerm, setSearchTerm] = useState('');
             const [sortOrder, setSortOrder] = useState('dateDesc'); 
 
             const strengthLogs = useMemo(() => logs.filter(l => !isCardio(l.muscleGroup)), [logs]);
             const cardioLogs = useMemo(() => logs.filter(l => isCardio(l.muscleGroup)), [logs]);
 
-            // --------------------------------------------------------
-            // CÁLCULOS DE PROGRESSÃO (FORÇA)
-            // --------------------------------------------------------
+            // ... (Funções getProgressionStats, getCardioProgressionStats, etc. permanecem as mesmas) ...
+            
             const getProgressionStats = (filteredLogs) => {
                 const maxWeightByExercise = {};
                 filteredLogs.forEach(l => {
@@ -547,7 +582,6 @@
                     const currentWeight = l.weight || 0;
                     const currentReps = l.reps || 0;
 
-                    // PR: Maior Peso, em caso de empate, Maior Repetição
                     if (!maxWeightByExercise[key] || currentWeight > maxWeightByExercise[key].maxW || (currentWeight === maxWeightByExercise[key].maxW && currentReps > maxWeightByExercise[key].maxR)) {
                          maxWeightByExercise[key] = { maxW: currentWeight, maxR: currentReps, group: l.muscleGroup, date: parseDate(l.workoutDate), logId: l.id };
                     }
@@ -557,18 +591,17 @@
 
                 const stats = Object.entries(maxWeightByExercise).map(([name, data]) => {
                     const currentPR = data.maxW;
+                    const todayUtc = parseDate(getLocalTodayDate()); 
                     
                     const progression = periods.map(period => {
-                        const pastDate = new Date();
-                        pastDate.setDate(pastDate.getDate() - period.days);
+                        const pastDateUtc = new Date(todayUtc.getTime() - (period.days * 86400000)); 
                         
                         let pastMaxW = 0;
                         filteredLogs.forEach(l => {
                             const logKey = `${l.exercise} (${l.variation})`;
                             if (logKey === name) {
                                 const logDate = parseDate(l.workoutDate);
-                                // FIX: Usando .getTime() para comparação robusta
-                                if (logDate.getTime() < pastDate.getTime()) { 
+                                if (logDate.getTime() < pastDateUtc.getTime()) { 
                                     if ((l.weight || 0) > pastMaxW) {
                                         pastMaxW = (l.weight || 0);
                                     }
@@ -591,9 +624,6 @@
             const allStrengthPrs = useMemo(() => getProgressionStats(strengthLogs), [strengthLogs]);
             const progressionStats = useMemo(() => allStrengthPrs.slice(0, 5), [allStrengthPrs]); 
 
-            // --------------------------------------------------------
-            // CÁLCULOS DE PROGRESSÃO (CARDIO)
-            // --------------------------------------------------------
             const getCardioProgressionStats = (filteredLogs) => {
                 const maxMetricByExercise = {};
 
@@ -602,7 +632,6 @@
                     const currentDistance = l.distance || 0;
                     const currentTime = l.time || 0;
                     
-                    // Métrica principal: Maior Distância (km). Desempate: Menor Tempo.
                     if (currentDistance > 0 && currentTime > 0) {
                         if (!maxMetricByExercise[key] || 
                             currentDistance > maxMetricByExercise[key].maxD || 
@@ -613,7 +642,6 @@
                     }
                 });
                 
-                // Formata e ordena por Distância Máxima
                 const combined = Object.entries(maxMetricByExercise).map(([name, data]) => ({
                     name, 
                     metric: data.maxD, 
@@ -628,14 +656,13 @@
             
             const allCardioPrs = useMemo(() => getCardioProgressionStats(cardioLogs), [cardioLogs]);
             
-            // Heatmap de constância (últimos 28 dias)
             const heatmapData = useMemo(() => {
                 const days = [];
                 const today = new Date();
-                const offset = today.getTimezoneOffset() * 60000;
+                const offset = today.getTimezoneOffset() * 60000; 
                 
                 for (let i = 27; i >= 0; i--) { 
-                    const d = new Date(today.getTime() - (i * 86400000) - offset);
+                    const d = new Date(today.getTime() - (i * 86400000) - offset); 
                     const dateStr = d.toISOString().split('T')[0];
                     const count = logs.filter(l => l.workoutDate === dateStr).length;
                     days.push({ date: dateStr, count, dayNum: d.getDate() });
@@ -643,7 +670,6 @@
                 return days;
             }, [logs]);
 
-            // Estatísticas de Foco Muscular
             const muscleStats = useMemo(() => {
                 const stats = {};
                 let total = 0;
@@ -656,10 +682,6 @@
                     .sort((a,b) => b.count - a.count);
             }, [logs]);
 
-
-            // --------------------------------------------------------
-            // HISTÓRICO AGRUPADO E FILTRADO
-            // --------------------------------------------------------
             const sortedAndFilteredLogs = useMemo(() => {
                 let filtered = logs.filter(l => 
                     (l.exercise || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -670,9 +692,8 @@
                     if (sortOrder === 'dateDesc') return b.createdAt - a.createdAt;
                     if (sortOrder === 'dateAsc') return a.createdAt - b.createdAt;
                     
-                    // Ordenação Métrica (Volume de Força ou Métrica de Cardio)
-                    const valA = isCardio(a.muscleGroup) ? (a.distance || 0) - (a.time || 0) * 0.001 : (a.weight || 0) * (a.reps || 0);
-                    const valB = isCardio(b.muscleGroup) ? (b.distance || 0) - (b.time || 0) * 0.001 : (b.weight || 0) * (b.reps || 0);
+                    const valA = isCardio(a.muscleGroup) ? (a.distance || 0) / (a.time || 1) : (a.weight || 0) * (a.reps || 0);
+                    const valB = isCardio(b.muscleGroup) ? (b.distance || 0) / (b.time || 1) : (b.weight || 0) * (b.reps || 0);
                     
                     if (sortOrder === 'metricDesc') return valB - valA;
                     if (sortOrder === 'metricAsc') return valA - valB;
@@ -691,9 +712,9 @@
                 return Object.entries(groups);
             }, [sortedAndFilteredLogs]);
 
-            // Função de Análise da IA
+            // Função de Análise da IA - AGORA USA A FUNÇÃO ROBUSTA callGeminiApi
             const analyze = async () => {
-                const resolvedKey = resolveApiKey();
+                const resolvedKey = apiKey; // Já é resolvida na função App.resolveApiKey
 
                 if (strengthLogs.length === 0) {
                      setAnalysis("Registre alguns treinos de força primeiro para que o Coach IA possa analisar seu progresso!");
@@ -703,27 +724,17 @@
                 setLoading(true);
                 setAnalysis('');
                 try {
-                    // Prepara histórico para a IA
                     const history = strengthLogs.slice(0, 30).map(l => `${l.dateString}: ${l.exercise} (${l.weight}kg x ${l.reps})`).join('\n');
                     
-                    // Prompt detalhado, enfatizando que os logs são PRs (carga máxima)
                     const prompt = `Aja como um treinador pessoal focado em progressão de carga. O histórico de treino abaixo contém APENAS o Recorde Pessoal (PR) de carga máxima/repetições de cada exercício por dia, e não todas as séries realizadas. Analise este histórico de PRs recentes e me dê um feedback curto (máx 3 frases) e motivador sobre a progressão ou consistência da carga máxima. Destaque um ou dois PRs recentes (peso mais alto) se existirem. Histórico:\n${history}`;
                     
-                    // Usa a chave resolvida para a chamada
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${resolvedKey}`, {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                    });
+                    const result = await callGeminiApi(prompt, resolvedKey);
                     
-                    if (!res.ok) {
-                         const errData = await res.json();
-                         throw new Error(errData.error?.message || `Erro HTTP ${res.status}`);
-                    }
-                    
-                    const data = await res.json();
-                    setAnalysis(data.candidates?.[0]?.content?.parts?.[0]?.text || "Erro na análise. Sem resposta.");
+                    setAnalysis(result || "Erro na análise. Sem resposta.");
+
                 } catch(e) { 
-                    setAnalysis(`Erro na IA: ${e.message}. Verifique sua chave API.`); 
+                    console.error("Erro na análise IA:", e);
+                    setAnalysis(`Erro na IA: ${e.message}. Verifique sua conexão ou a Chave API.`); 
                 }
                 setLoading(false);
             };
@@ -1006,7 +1017,7 @@
                                     >
                                         <option value="dateDesc">Mais Recente</option>
                                         <option value="dateAsc">Mais Antigo</option>
-                                        <option value="metricDesc">Maior Métrica (Carga/Dist)</option>
+                                        <option value="metricDesc">Maior Métrica (Carga/Velocidade)</option>
                                         <option value="metricAsc">Menor Métrica</option>
                                     </select>
                                 </div>
@@ -1078,6 +1089,12 @@
                 }
             }, [group]);
 
+            useEffect(() => {
+                 if (group && type && EXERCISE_CATALOG[group] && EXERCISE_CATALOG[group][type] && !EXERCISE_CATALOG[group][type].includes(variation)) {
+                    setVariation('');
+                }
+            }, [type]);
+
             const handleSave = () => {
                 const [y, m, d] = date.split('-');
                 let updatedMetrics = {};
@@ -1126,13 +1143,18 @@
                                 <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="w-full bg-gray-50 p-3 rounded-xl font-bold outline-none text-gray-700"/>
                             </div>
                             
-                            <Select label="Grupo" value={group} onChange={e=>{setGroup(e.target.value); setType(''); setVariation('');}} options={Object.keys(EXERCISE_CATALOG)} />
+                            <Select 
+                                label="Grupo" 
+                                value={group} 
+                                onChange={e=>{setGroup(e.target.value); setType(''); setVariation('');}} 
+                                options={Object.keys(EXERCISE_CATALOG)} 
+                            />
                             
                             <div className="relative">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Exercício</label>
                                 <select value={type} onChange={e=>setType(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold outline-none appearance-none text-gray-700 text-sm">
                                     <option value="" disabled>Selecione...</option>
-                                    {!exerciseOptions.includes(type) && type && <option value={type}>{type} (Arquivo)</option>}
+                                    {!exerciseOptions.includes(type) && type && <option value={type}>{type} (Arquivo)</option>} 
                                     {exerciseOptions.sort().map(o=><option key={o} value={o}>{o}</option>)}
                                 </select>
                                 <ChevronDown className="absolute right-3 top-8 text-gray-400 w-4 h-4 pointer-events-none"/>
@@ -1192,53 +1214,51 @@
             useEffect(() => { 
                 if(group && type && EXERCISE_CATALOG[group] && EXERCISE_CATALOG[group][type]) {
                     setVariation(EXERCISE_CATALOG[group][type][0] || '');
+                } else {
+                    setVariation('');
                 }
                 setTipContent(''); setAltContent(''); setShowTips(false);
             }, [type]);
+            useEffect(() => { setTipContent(''); setAltContent(''); setShowTips(false); }, [variation]);
 
+
+            // ATUALIZADO: Usando callGeminiApi
             const fetchTips = async () => { 
-                const resolvedKey = resolveApiKey();
-                if(!resolvedKey || resolvedKey === DEFAULT_API_KEY) { showMessage("Chave API Ausente", "Por favor, insira sua Chave API nas Configurações para usar as Dicas de Execução.", "error"); return; }
-                if(isCurrentCardio) { setTipContent("Dicas de execução não se aplicam a Cardio da mesma forma. Registre apenas a performance!"); return; }
+                const resolvedKey = apiKey;
+                if(isCurrentCardio) { setTipContent("Dicas de execução não se aplicam a Cardio da mesma forma. Registre apenas a performance!"); setAltContent(''); setShowTips(true); return; }
 
                 setShowTips(true);
                 setAltContent(''); 
-                if(tipContent) return; 
+                if(tipContent && !tipLoading) return; 
 
                 setTipLoading(true);
                 try {
                     const prompt = `Explique de forma resumida e direta (em bullet points) a forma correta de executar o exercício: ${type} (${variation}). Dê 2 dicas de segurança cruciais para este movimento.`;
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${resolvedKey}`, {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                    });
-                    if (!res.ok) throw new Error("Erro na API de Geração");
-                    const data = await res.json();
-                    setTipContent(data.candidates?.[0]?.content?.parts?.[0]?.text || "Sem resposta.");
-                } catch(e) { setTipContent(`Erro: ${e.message}. Verifique sua chave.`); }
+                    const result = await callGeminiApi(prompt, resolvedKey);
+                    setTipContent(result || "Sem resposta da IA.");
+                } catch(e) { 
+                    setTipContent(`Erro ao consultar IA: ${e.message}.`); 
+                }
                 setTipLoading(false);
             };
 
+            // ATUALIZADO: Usando callGeminiApi
             const fetchAlternative = async () => { 
-                const resolvedKey = resolveApiKey();
-                if(!resolvedKey || resolvedKey === DEFAULT_API_KEY) { showMessage("Chave API Ausente", "Por favor, insira sua Chave API nas Configurações para usar as Sugestões de Alternativas.", "error"); return; }
-                if(isCurrentCardio) { setAltContent("Alternativas não são fornecidas para Cardio. Escolha na lista ou registre a performance!"); return; }
+                const resolvedKey = apiKey;
+                if(isCurrentCardio) { setAltContent("Alternativas não são fornecidas para Cardio. Escolha na lista ou registre a performance!"); setTipContent(''); setShowTips(true); return; }
 
                 setShowTips(true);
                 setTipContent('');
-                if(altContent) return;
+                if(altContent && !tipLoading) return;
 
                 setTipLoading(true);
                 try {
                     const prompt = `Sugira uma alternativa biomecanicamente similar para o exercício ${type} (${variation}) que possa ser feita em casa ou com equipamentos simples. Seja direto e explique o foco muscular.`;
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${resolvedKey}`, {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                    });
-                    if (!res.ok) throw new Error("Erro na API de Geração");
-                    const data = await res.json();
-                    setAltContent(data.candidates?.[0]?.content?.parts?.[0]?.text || "Sem resposta.");
-                } catch(e) { setAltContent(`Erro: ${e.message}. Verifique sua chave.`); }
+                    const result = await callGeminiApi(prompt, resolvedKey);
+                    setAltContent(result || "Sem resposta da IA.");
+                } catch(e) { 
+                    setAltContent(`Erro ao consultar IA: ${e.message}.`); 
+                }
                 setTipLoading(false);
             };
 
@@ -1257,19 +1277,19 @@
                 }
 
                 if (!isValid) {
-                    showMessage("Campos Inválidos", "Preencha todos os campos obrigatórios (Carga/Reps ou Tempo/Distância) e selecione o exercício.", "error");
+                    showMessage("Campos Inválidos", "Preencha todos os campos obrigatórios (Carga/Reps ou Tempo/Distância) e selecione o exercício/variação.", "error");
                     return;
                 }
 
                 const [y, m, d] = date.split('-');
                 const log = {
-                    id: Date.now(), muscleGroup: group, exercise: type, variation, 
+                    id: Date.now(), 
+                    muscleGroup: group, exercise: type, variation, 
                     workoutDate: date, dateString: `${d}/${m}/${y}`, createdAt: Date.now(),
                     ...logData
                 };
                 onUpdateLogs(StorageService.saveLog(log));
                 
-                // Reseta campos
                 setWeight(''); setReps(''); setTime(''); setDistance('');
                 showMessage("Registro Salvo!", `${isCurrentCardio ? 'Cardio' : 'Série'} registrada com sucesso.`, "success");
             };
