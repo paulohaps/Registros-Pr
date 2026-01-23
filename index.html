@@ -4,164 +4,375 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Registro PR's+ Sync</title>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+    
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; overscroll-behavior-y: none; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .animate-fade { animation: fadeIn 0.4s ease-out; }
-        .is-expanded { max-height: 2000px; opacity: 1; overflow: auto; transition: max-height 0.3s ease-out; }
-        .is-collapsed { max-height: 0; opacity: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f3f4f6;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .animate-fade { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     </style>
+
     <script type="importmap">
     {
         "imports": {
             "react": "https://esm.sh/react@18.2.0",
             "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-            "lucide-react": "https://esm.sh/lucide-react@0.300.0"
+            "lucide-react": "https://esm.sh/lucide-react@0.344.0"
         }
     }
     </script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
-<body class="text-gray-900">
+<body class="text-gray-900 selection:bg-indigo-100">
+
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useMemo, useRef } from 'react';
+        import React, { useState, useEffect, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { BarChart2, Plus, Trash2, Pencil, Trophy, Sparkles, Brain, X, Settings, Download, Upload, Flame, LayoutGrid, ChevronDown, RefreshCw, TrendingUp, Hash, Clock, Route, Search, AlertTriangle, ChevronUp, CloudSync } from 'lucide-react';
+        import { 
+            BarChart2, Plus, Trash2, Trophy, Settings, RefreshCw, 
+            ChevronDown, Flame, LayoutGrid, Sparkles, Clock, 
+            Route, Search, X, CheckCircle2, AlertCircle
+        } from 'lucide-react';
 
+        // URL DA TUA API (PLANILHA)
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw6PNmQm1b-gK2p2mGfa9-qNIsZJl4-dYDMC-ue3EpQ9OSda-Nz7sJalLRltSZLAGosKg/exec";
 
-        // COPIE O SEU EXERCISE_CATALOG ORIGINAL AQUI (Mantive o reduzido para o código não ficar gigante, mas você pode colar o seu completo)
         const EXERCISE_CATALOG = {
-            "Peitoral": { "Supino Reto": ["Barra Livre", "Halteres"], "Crossover": ["Polia Alta", "Polia Baixa"] },
-            "Costas": { "Puxada Alta": ["Frente", "Triângulo"], "Remada Curvada": ["Barra", "Halter"] },
-            "Cardio": { "Corrida": ["Rua", "Esteira"], "Bike": ["Spinning"] }
+            "Peitoral": {
+                "Supino Reto": ["Barra", "Halteres", "Máquina"],
+                "Supino Inclinado": ["Barra", "Halteres"],
+                "Crossover": ["Polia Alta", "Polia Baixa"],
+                "Flexões": ["Padrão", "Diamante"]
+            },
+            "Costas": {
+                "Puxada Alta": ["Aberta", "Triângulo", "Supinada"],
+                "Remada Curvada": ["Barra", "Halter"],
+                "Remada Unilateral": ["Serrote"],
+                "Levantamento Terra": ["Convencional", "Sumô"]
+            },
+            "Ombros": {
+                "Desenvolvimento": ["Halteres", "Barra", "Máquina"],
+                "Elevação Lateral": ["Halteres", "Polia"],
+                "Elevação Frontal": ["Halteres", "Anilha"]
+            },
+            "Pernas": {
+                "Agachamento": ["Livre", "Smith", "Hack"],
+                "Leg Press": ["45 Graus", "Horizontal"],
+                "Cadeira Extensora": ["Bilateral"],
+                "Mesa Flexora": ["Deitada"]
+            },
+            "Braços": {
+                "Rosca Direta": ["Barra W", "Halteres"],
+                "Tríceps Corda": ["Polia Alta"],
+                "Tríceps Testa": ["Barra W"]
+            },
+            "Cardio": {
+                "Esteira": ["Caminhada", "Corrida"],
+                "Bike": ["Spinning", "Ergométrica"],
+                "Elíptico": ["Padrão"]
+            }
         };
 
-        const StorageService = {
-            getLogs: () => JSON.parse(localStorage.getItem('registro_prs_logs_v2') || '[]'),
-            saveLogs: (logs) => localStorage.setItem('registro_prs_logs_v2', JSON.stringify(logs))
-        };
-
-        function App() {
-            const [activeTab, setActiveTab] = useState('metrics');
-            const [logs, setLogs] = useState([]);
-            const [isSyncing, setIsSyncing] = useState(false);
-
-            useEffect(() => {
-                setLogs(StorageService.getLogs());
-                handleSync();
-            }, []);
-
-            const handleSync = async () => {
-                setIsSyncing(true);
-                try {
-                    const res = await fetch(WEB_APP_URL);
-                    const data = await res.json();
-                    if (Array.isArray(data)) {
-                        setLogs(data);
-                        StorageService.saveLogs(data);
-                    }
-                } catch (e) { console.error(e); }
-                setIsSyncing(false);
-            };
-
-            const onAddLog = async (newLog) => {
-                const updated = [newLog, ...logs];
-                setLogs(updated);
-                StorageService.saveLogs(updated);
-                await fetch(WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(newLog) });
-            };
-
+        function NavButton({ active, onClick, icon: Icon, label }) {
             return (
-                <div className="min-h-screen pb-24 flex flex-col">
-                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center sticky top-0 z-50">
-                        <div className="flex items-center space-x-2">
-                            <Trophy className="text-yellow-400" />
-                            <h1 className="font-black italic">PR'S <span className="text-indigo-400">SYNC</span></h1>
-                        </div>
-                        <button onClick={handleSync} className={`${isSyncing ? 'animate-spin' : ''}`}>
-                            <CloudSync className="w-6 h-6" />
-                        </button>
-                    </header>
-
-                    <main className="max-w-4xl mx-auto p-4 w-full">
-                        {activeTab === 'log' ? <LoggerSection onAddLog={onAddLog} /> : <MetricsSection logs={logs} />}
-                    </main>
-
-                    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-2 shadow-lg z-50">
-                        <button onClick={() => setActiveTab('metrics')} className={`flex flex-col items-center p-2 ${activeTab === 'metrics' ? 'text-indigo-600' : 'text-gray-400'}`}>
-                            <BarChart2 /> <span className="text-[10px] font-bold">Dash</span>
-                        </button>
-                        <button onClick={() => setActiveTab('log')} className={`flex flex-col items-center p-2 ${activeTab === 'log' ? 'text-indigo-600' : 'text-gray-400'}`}>
-                            <Plus /> <span className="text-[10px] font-bold">Registrar</span>
-                        </button>
-                    </nav>
-                </div>
+                <button onClick={onClick} className={`flex flex-col items-center space-y-1 transition ${active ? 'text-indigo-600' : 'text-slate-400'}`}>
+                    <Icon className="w-6 h-6" strokeWidth={active ? 2.5 : 2} />
+                    <span className="text-[10px] font-bold uppercase tracking-tighter">{label}</span>
+                </button>
             );
         }
 
-        // --- SUB-COMPONENTES (Logger e Metrics adaptados do seu original) ---
-        function LoggerSection({ onAddLog }) {
+        function LogForm({ onAdd }) {
             const [group, setGroup] = useState('Peitoral');
             const [exercise, setExercise] = useState('');
             const [variation, setVariation] = useState('');
             const [weight, setWeight] = useState('');
             const [reps, setReps] = useState('');
 
-            const handleSave = (e) => {
+            const exercises = useMemo(() => Object.keys(EXERCISE_CATALOG[group] || {}), [group]);
+            const variations = useMemo(() => EXERCISE_CATALOG[group]?.[exercise] || [], [group, exercise]);
+
+            const handleSubmit = (e) => {
                 e.preventDefault();
-                onAddLog({
-                    id: Date.now(),
-                    workoutDate: new Date().toISOString().split('T')[0],
-                    muscleGroup: group, exercise, variation, weight, reps
+                if (!exercise || !variation) return;
+
+                onAdd({
+                    workoutDate: new Date().toLocaleDateString('pt-BR'),
+                    exercise,
+                    variation,
+                    muscleGroup: group,
+                    weight: parseFloat(weight) || 0,
+                    reps: parseInt(reps) || 0,
+                    id: Date.now()
                 });
-                alert("Sincronizado!");
+
+                setWeight('');
+                setReps('');
             };
 
             return (
-                <div className="bg-white p-6 rounded-3xl shadow-sm border animate-fade">
-                    <h2 className="font-bold mb-4 flex items-center"><Plus className="mr-2 text-indigo-500"/> Novo PR</h2>
-                    <form onSubmit={handleSave} className="space-y-4">
-                        <select value={group} onChange={e => setGroup(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl border">
-                            {Object.keys(EXERCISE_CATALOG).map(g => <option key={g} value={g}>{g}</option>)}
-                        </select>
-                        <select value={exercise} onChange={e => setExercise(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl border">
-                            <option value="">Exercício...</option>
-                            {Object.keys(EXERCISE_CATALOG[group]).map(ex => <option key={ex} value={ex}>{ex}</option>)}
-                        </select>
-                        <div className="grid grid-cols-2 gap-3">
-                            <input type="number" placeholder="Peso" value={weight} onChange={e => setWeight(e.target.value)} className="p-3 bg-gray-50 rounded-xl border text-center font-bold" />
-                            <input type="number" placeholder="Reps" value={reps} onChange={e => setReps(e.target.value)} className="p-3 bg-gray-50 rounded-xl border text-center font-bold" />
-                        </div>
-                        <button className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg">CONFIRMAR</button>
-                    </form>
+                <div className="animate-fade space-y-6">
+                    <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner">
+                        <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center">
+                            <Plus className="w-5 h-5 mr-2 text-indigo-500" /> REGISTAR TREINO
+                        </h2>
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Grupo Muscular</label>
+                                <select 
+                                    value={group} 
+                                    onChange={(e) => { setGroup(e.target.value); setExercise(''); setVariation(''); }}
+                                    className="w-full p-4 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                >
+                                    {Object.keys(EXERCISE_CATALOG).map(g => <option key={g} value={g}>{g}</option>)}
+                                </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Exercício</label>
+                                    <select 
+                                        value={exercise} 
+                                        onChange={(e) => { setExercise(e.target.value); setVariation(''); }}
+                                        className="w-full p-4 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                    >
+                                        <option value="">Escolher...</option>
+                                        {exercises.map(ex => <option key={ex} value={ex}>{ex}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Variação</label>
+                                    <select 
+                                        value={variation} 
+                                        onChange={(e) => setVariation(e.target.value)}
+                                        className="w-full p-4 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                    >
+                                        <option value="">Escolher...</option>
+                                        {variations.map(v => <option key={v} value={v}>{v}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col items-center">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase mb-2">Carga (kg)</span>
+                                    <input 
+                                        type="number" 
+                                        placeholder="0"
+                                        value={weight}
+                                        onChange={e => setWeight(e.target.value)}
+                                        className="text-3xl font-black text-indigo-600 text-center w-full outline-none"
+                                    />
+                                </div>
+                                <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col items-center">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase mb-2">Repetições</span>
+                                    <input 
+                                        type="number" 
+                                        placeholder="0"
+                                        value={reps}
+                                        onChange={e => setReps(e.target.value)}
+                                        className="text-3xl font-black text-slate-700 text-center w-full outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <button 
+                                type="submit"
+                                disabled={!variation}
+                                className="w-full bg-slate-900 text-white font-black py-5 rounded-3xl shadow-xl shadow-slate-200 active:scale-95 transition disabled:opacity-30 uppercase tracking-widest text-sm"
+                            >
+                                Confirmar Série
+                            </button>
+                        </form>
+                    </div>
                 </div>
             );
         }
 
-        function MetricsSection({ logs }) {
+        function Dashboard({ logs }) {
+            const lastLogs = useMemo(() => logs.slice(0, 10), [logs]);
+
             return (
-                <div className="space-y-4 animate-fade">
-                    <div className="bg-white p-5 rounded-3xl shadow-sm border">
-                        <h3 className="font-bold text-gray-800 flex items-center mb-4"><Trophy className="w-4 h-4 mr-2 text-yellow-500" /> HISTÓRICO SYNC</h3>
-                        {logs.length === 0 ? <p className="text-gray-400 text-center py-10">Nenhum dado na nuvem.</p> : 
-                        logs.map(log => (
-                            <div key={log.id} className="flex justify-between items-center border-b py-3 last:border-0">
-                                <div>
-                                    <div className="font-bold text-sm">{log.exercise}</div>
-                                    <div className="text-[10px] text-gray-400">{log.workoutDate}</div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="font-black text-indigo-600">{log.weight}kg</div>
-                                    <div className="text-[10px] text-gray-400">{log.reps} reps</div>
-                                </div>
-                            </div>
-                        ))}
+                <div className="animate-fade space-y-6">
+                    {/* Sumário */}
+                    <div className="bg-indigo-600 p-6 rounded-[2.5rem] text-white shadow-xl shadow-indigo-100 flex justify-between items-center overflow-hidden relative">
+                        <Sparkles className="absolute -right-4 -top-4 w-24 h-24 opacity-10" />
+                        <div>
+                            <p className="text-[10px] font-black opacity-60 uppercase tracking-widest">Total de Registos</p>
+                            <h3 className="text-4xl font-black">{logs.length}</h3>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-[10px] font-black opacity-60 uppercase tracking-widest">Último Treino</p>
+                            <h3 className="text-lg font-black">{logs[0]?.workoutDate || '--/--/--'}</h3>
+                        </div>
                     </div>
+
+                    {/* Histórico */}
+                    <div className="bg-white rounded-[2.5rem] border border-slate-100 p-6">
+                        <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center">
+                            <Clock className="w-4 h-4 mr-2" /> Histórico Recente
+                        </h3>
+
+                        {lastLogs.length === 0 ? (
+                            <div className="text-center py-12 text-slate-300">
+                                <Search className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                                <p className="font-bold">Nenhum registo encontrado.</p>
+                                <p className="text-xs">Começa a registar os teus PRs!</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {lastLogs.map((log) => (
+                                    <div key={log.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <div className="flex items-center space-x-4">
+                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                                                <Trophy className={`w-5 h-5 ${log.weight > 50 ? 'text-yellow-500' : 'text-slate-300'}`} />
+                                            </div>
+                                            <div>
+                                                <p className="font-black text-slate-800 text-sm">{log.exercise}</p>
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase">{log.variation}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-black text-indigo-600 text-lg">{log.weight}kg</p>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase">{log.reps} reps</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function App() {
+            const [activeTab, setActiveTab] = useState('metrics'); // 'metrics' ou 'log'
+            const [logs, setLogs] = useState([]);
+            const [isSyncing, setIsSyncing] = useState(false);
+            const [status, setStatus] = useState(null); // { type: 'success' | 'error', msg: '' }
+
+            // Carregar dados locais e sincronizar ao abrir
+            useEffect(() => {
+                const local = localStorage.getItem('prs_sync_data');
+                if (local) setLogs(JSON.parse(local));
+                fetchCloudData();
+            }, []);
+
+            const fetchCloudData = async () => {
+                setIsSyncing(true);
+                try {
+                    const response = await fetch(WEB_APP_URL);
+                    const data = await response.json();
+                    if (Array.isArray(data)) {
+                        setLogs(data);
+                        localStorage.setItem('prs_sync_data', JSON.stringify(data));
+                    }
+                } catch (e) {
+                    console.error("Erro ao baixar dados:", e);
+                }
+                setIsSyncing(false);
+            };
+
+            const addLog = async (newLog) => {
+                const updatedLogs = [newLog, ...logs];
+                setLogs(updatedLogs);
+                localStorage.setItem('prs_sync_data', JSON.stringify(updatedLogs));
+                
+                setStatus({ type: 'info', msg: 'A enviar para a planilha...' });
+                
+                try {
+                    await fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newLog)
+                    });
+                    setStatus({ type: 'success', msg: 'Sincronizado com sucesso!' });
+                } catch (e) {
+                    setStatus({ type: 'error', msg: 'Erro ao sincronizar. Salvo apenas localmente.' });
+                }
+
+                setTimeout(() => setStatus(null), 3000);
+            };
+
+            return (
+                <div className="min-h-screen pb-24 flex flex-col max-w-2xl mx-auto shadow-2xl bg-white">
+                    {/* Header */}
+                    <header className="bg-slate-900 text-white p-5 flex justify-between items-center sticky top-0 z-50 rounded-b-3xl shadow-lg">
+                        <div className="flex items-center space-x-2">
+                            <div className="bg-indigo-500 p-2 rounded-xl">
+                                <Trophy className="w-5 h-5 text-yellow-300" />
+                            </div>
+                            <div>
+                                <h1 className="text-lg font-black italic tracking-tighter">PR'S <span className="text-indigo-400">SYNC</span></h1>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Controlo de Carga</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={fetchCloudData} 
+                            disabled={isSyncing}
+                            className={`p-3 rounded-full bg-slate-800 hover:bg-slate-700 transition active:scale-95 ${isSyncing ? 'animate-spin text-indigo-400' : 'text-white'}`}
+                        >
+                            <RefreshCw className="w-6 h-6" />
+                        </button>
+                    </header>
+
+                    {/* Status Bar */}
+                    {status && (
+                        <div className={`mx-4 mt-4 p-3 rounded-xl text-xs font-bold flex items-center animate-fade ${status.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                            {status.type === 'error' ? <AlertCircle className="w-4 h-4 mr-2"/> : <CheckCircle2 className="w-4 h-4 mr-2"/>}
+                            {status.msg}
+                        </div>
+                    )}
+
+                    {/* Conteúdo */}
+                    <main className="p-4 flex-grow">
+                        {activeTab === 'log' ? (
+                            <LogForm onAdd={addLog} />
+                        ) : (
+                            <Dashboard logs={logs} />
+                        )}
+                    </main>
+
+                    {/* Tab Bar */}
+                    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-2xl bg-white/80 backdrop-blur-md border-t border-slate-100 flex justify-around p-3 pb-6 z-50">
+                        <NavButton 
+                            active={activeTab === 'metrics'} 
+                            onClick={() => setActiveTab('metrics')} 
+                            icon={BarChart2} 
+                            label="Estatísticas" 
+                        />
+                        <div className="relative -top-8">
+                            <button 
+                                onClick={() => setActiveTab('log')}
+                                className={`p-5 rounded-full shadow-xl transition-all active:scale-90 ${activeTab === 'log' ? 'bg-indigo-600 text-white rotate-90' : 'bg-slate-900 text-white'}`}
+                            >
+                                <Plus className="w-7 h-7" />
+                            </button>
+                        </div>
+                        <NavButton 
+                            active={activeTab === 'log'} 
+                            onClick={() => setActiveTab('log')} 
+                            icon={Flame} 
+                            label="Novo PR" 
+                        />
+                    </nav>
                 </div>
             );
         }
