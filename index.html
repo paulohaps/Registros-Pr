@@ -3,17 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PR's Sync + Análise</title>
+    <title>PR's Sync Pro</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://script.google.com/macros/s/AKfycby_lDOnTu3wC8g3jwCpUsk2QGy4JQwITVPnvHHZA-U8hPwLauHV2tmiSUPgY1QFaBo/exec">
     
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
         .animate-fade { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .is-expanded { max-height: 2000px; opacity: 1; transition: all 0.3s ease-in; }
-        .is-collapsed { max-height: 0; opacity: 0; overflow: hidden; transition: all 0.3s ease-out; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
     </style>
@@ -37,85 +35,97 @@
         import React, { useState, useEffect, useMemo, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
         import { 
-            BarChart2, Plus, Trash2, Pencil, Trophy, Sparkles, Brain, X, 
-            Settings, Download, Upload, Flame, LayoutGrid, ChevronDown, 
-            RefreshCw, TrendingUp, Hash, Clock, Route, Search, AlertTriangle, 
-            ChevronUp, CheckCircle2, Loader2
+            BarChart2, Plus, Trash2, Pencil, Trophy, X, 
+            Settings, Download, Upload, Flame, ChevronDown, 
+            RefreshCw, Clock, Route, CheckCircle2, AlertTriangle, 
+            FileText, Database
         } from 'lucide-react';
 
-        // --- CONFIGURAÇÕES DE INTEGRAÇÃO ---
+        // --- CONFIGURAÇÕES ---
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyqKX-2gdgSsT4KzoQitXCV3ra3ZR3u3qxaCUuGtfrwODfQUy3Rx1jvdFWzfIpb6zDc/exec";
-        const DEFAULT_API_KEY = ""; // Chave Gemini opcional
 
         const EXERCISE_CATALOG = {
             "Peitoral": {
-                "Supino Reto": ["Barra Livre", "Halteres", "Smith", "Máquina Vertical", "Articulado"],
-                "Supino Inclinado": ["Barra Livre", "Halteres", "Smith"],
-                "Crucifixo": ["Halteres", "Peck Deck", "Polia"],
-                "Crossover": ["Polia Alta", "Polia Baixa", "Polia Média"],
-                "Flexão": ["Padrão", "Inclinada", "Diamante"]
+                "Supino Reto": ["Barra Livre", "Halteres", "Smith", "Máquina Vertical", "Máquina Horizontal", "Articulado (Hammer)", "Chão (Floor Press)"],
+                "Supino Inclinado": ["Barra Livre", "Halteres", "Smith", "Máquina", "Articulado (Hammer)"],
+                "Supino Declinado": ["Barra Livre", "Halteres", "Smith", "Máquina", "Articulado"],
+                "Crucifixo": ["Reto (Halteres)", "Inclinado (Halteres)", "Declinado (Halteres)", "Máquina (Peck Deck)", "Polia Média (Em pé)", "Banco Reto (Polia)"],
+                "Crossover (Polia)": ["Polia Alta (Foco Inferior)", "Polia Baixa (Foco Superior)", "Polia Média"],
+                "Flexão de Braço": ["Padrão (Chão)", "Pés Elevados (Inclinada)", "Mãos Elevadas (Declinada)", "Diamante (Fechada)", "Aberta", "Com Peso"],
+                "Paralelas": ["Corpo Livre", "Máquina (Graviton)", "Com Peso Adicional"],
+                "Pullover": ["Halter", "Barra", "Corda (Polia)"]
             },
             "Costas": {
-                "Puxada Alta": ["Aberta", "Supinada", "Triângulo"],
-                "Remada Curvada": ["Barra", "Halteres", "Smith"],
-                "Remada Unilateral": ["Serrote", "Polia"],
-                "Levantamento Terra": ["Convencional", "Sumô"],
-                "Pulldown": ["Corda", "Barra Reta"]
+                "Puxada Alta (Polia)": ["Frente (Pegada Aberta Pronada)", "Frente (Pegada Fechada Supinada)", "Triângulo (Neutra)", "Barra Romana (Neutra)", "Unilateral", "Articulada"],
+                "Remada Curvada": ["Barra (Pronada)", "Barra (Supinada)", "Halteres (Bilateral)", "Smith"],
+                "Remada Unilateral": ["Serrote (Halter)", "Kroc Rows", "Máquina Unilateral", "Polia Baixa"],
+                "Remada Baixa (Sentado)": ["Triângulo", "Barra Romana", "Barra Reta (Pronada)", "Barra Reta (Supinada)", "Corda"],
+                "Remada Máquina": ["Pegada Aberta (Pronada)", "Pegada Fechada (Neutra)", "Apoiada no Peito (Chest Supported)"],
+                "Remada Cavalinho": ["Barra Livre", "Máquina"],
+                "Levantamento Terra": ["Convencional", "Sumô", "Meio Terra (Rack Pull)", "Com Déficit"],
+                "Barra Fixa": ["Pronada (Pull-up)", "Supinada (Chin-up)", "Neutra", "Graviton (Assistida)"],
+                "Pullover (Dorsal)": ["Corda (Polia Alta)", "Barra Reta (Polia Alta)", "Máquina (Pullover)"],
+                "Extensão Lombar": ["Banco (Hiperextensão)", "Máquina", "Good Morning"]
             },
             "Ombros": {
-                "Desenvolvimento": ["Halteres", "Barra", "Arnold Press", "Máquina"],
-                "Elevação Lateral": ["Halteres", "Polia", "Unilateral"],
-                "Elevação Frontal": ["Halteres", "Anilha", "Corda"],
-                "Posterior": ["Face Pull", "Crucifixo Inverso"]
+                "Desenvolvimento": ["Barra (Militar)", "Halteres (Sentado)", "Arnold Press", "Smith", "Máquina"],
+                "Elevação Lateral": ["Halteres", "Polia", "Máquina", "Unilateral"],
+                "Elevação Frontal": ["Halteres (Martelo)", "Barra", "Corda", "Anilha"],
+                "Posterior": ["Crucifixo Inverso (Halter)", "Voador Inverso", "Face Pull"],
+                "Remada Alta": ["Barra", "Polia", "Halteres"],
+                "Encolhimento": ["Barra", "Halteres", "Smith"]
             },
-            "Pernas": {
-                "Agachamento": ["Livre", "Smith", "Hack", "Goblet"],
-                "Leg Press": ["45 Graus", "Horizontal"],
-                "Extensora": ["Bilateral", "Unilateral"],
-                "Flexora": ["Mesa Deitada", "Cadeira Sentada"],
-                "Panturrilha": ["Em Pé", "Sentado (Gêmeos)"]
+            "Pernas: Quadríceps": {
+                "Agachamento": ["Livre", "Frontal", "Sumô", "Halter (Goblet)"],
+                "Agachamento Máquina": ["Smith", "Hack Machine", "V-Squat", "Pêndulo"],
+                "Leg Press": ["45 Graus", "Horizontal", "Unilateral"],
+                "Cadeira Extensora": ["Bilateral", "Unilateral"],
+                "Passada/Afundo": ["Avanço", "Búlgaro", "Subida no Banco"]
             },
-            "Braços": {
+            "Pernas: Posteriores": {
+                "Mesa Flexora": ["Deitada"],
+                "Cadeira Flexora": ["Sentada"],
+                "Stiff": ["Barra", "Halteres", "Smith"],
+                "RDL": ["Barra", "Halteres"],
+                "Flexora em Pé": ["Máquina", "Caneleira"]
+            },
+            "Pernas: Glúteos": {
+                "Elevação Pélvica": ["Barra Livre", "Máquina", "Smith"],
+                "Cadeira Abdutora": ["Sentado"],
+                "Glúteo Polia": ["Coice", "Lateral"]
+            },
+            "Panturrilhas": {
+                "Gêmeos em Pé": ["Máquina", "Smith", "Livre"],
+                "Gêmeos Sentado": ["Máquina"],
+                "No Leg Press": ["45 Graus", "Horizontal"]
+            },
+            "Tríceps": {
+                "Tríceps Polia": ["Corda", "Barra Reta", "Barra V", "Inversa"],
+                "Tríceps Testa": ["Barra W", "Halteres", "Polia"],
+                "Tríceps Francês": ["Halter", "Corda", "Barra W"],
+                "Paralelas/Mergulho": ["Máquina", "Banco", "Barras"]
+            },
+            "Bíceps": {
                 "Rosca Direta": ["Barra W", "Barra Reta", "Polia"],
-                "Rosca Martelo": ["Halteres", "Corda"],
-                "Tríceps Corda": ["Polia Alta"],
-                "Tríceps Testa": ["Barra W", "Halteres"],
-                "Mergulho": ["Paralelas", "Banco"]
+                "Rosca Alternada": ["Halteres", "Banco Inclinado"],
+                "Rosca Martelo": ["Halteres", "Corda", "Barra H"],
+                "Rosca Scott": ["Barra W", "Máquina"]
             },
-            "Abdômen": {
-                "Crunch": ["Chão", "Máquina", "Corda"],
-                "Elevação Pernas": ["Suspenso", "Chão"],
-                "Prancha": ["Frontal", "Lateral"]
+            "Abdômen / Core": {
+                "Crunch": ["Chão", "Máquina", "Polia"],
+                "Elevação Pernas": ["Barra", "Chão"],
+                "Prancha": ["Frontal", "Lateral"],
+                "Roda Abdominal": ["Padrão"]
             },
             "Cardio": {
-                "Máquinas": ["Esteira (Corrida)", "Esteira (Caminhada)", "Bike Spinning", "Elíptico", "Escada"],
-                "Livre": ["Pular Corda", "Corrida Rua", "Burpees"]
+                "Máquinas": ["Esteira (Corrida)", "Esteira (Caminhada)", "Bike Spinning", "Bike Ergométrica", "Elíptico", "Escada"],
+                "Livre": ["Corrida na Rua", "Pular Corda", "Burpees", "Polichinelos"]
             }
         };
 
         // --- UTILITÁRIOS ---
         const getLocalTodayDate = () => new Date().toISOString().split('T')[0];
-        const isCardio = (group) => group === 'Cardio' || group === 'Cardio: Máquinas' || group === 'Cardio: Livre';
-
-        // --- COMPONENTE DE SELEÇÃO ---
-        function CustomSelect({ label, value, onChange, options, placeholder = "Selecione..." }) {
-            return (
-                <div className="relative">
-                    <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block ml-1">{label}</label>
-                    <div className="relative">
-                        <select 
-                            value={value} 
-                            onChange={onChange} 
-                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 appearance-none transition"
-                        >
-                            <option value="">{placeholder}</option>
-                            {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                        </select>
-                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 pointer-events-none" />
-                    </div>
-                </div>
-            );
-        }
+        const isCardio = (group) => group && group.includes('Cardio');
 
         // --- APP PRINCIPAL ---
         function App() {
@@ -123,10 +133,10 @@
             const [logs, setLogs] = useState([]);
             const [isSyncing, setIsSyncing] = useState(false);
             const [status, setStatus] = useState(null);
+            const [editingLog, setEditingLog] = useState(null);
 
-            // Carregamento Inicial
             useEffect(() => {
-                const local = localStorage.getItem('prs_sync_v2_combined');
+                const local = localStorage.getItem('prs_sync_v4');
                 if (local) setLogs(JSON.parse(local));
                 fetchCloudData();
             }, []);
@@ -137,159 +147,251 @@
                     const response = await fetch(WEB_APP_URL);
                     const data = await response.json();
                     if (Array.isArray(data)) {
-                        const sortedData = data.sort((a, b) => (b.id || 0) - (a.id || 0));
-                        setLogs(sortedData);
-                        localStorage.setItem('prs_sync_v2_combined', JSON.stringify(sortedData));
+                        const sorted = data.sort((a, b) => b.id - a.id);
+                        setLogs(sorted);
+                        localStorage.setItem('prs_sync_v4', JSON.stringify(sorted));
                     }
-                } catch (e) {
-                    console.error("Erro Sync:", e);
-                }
+                } catch (e) { console.error(e); }
                 setIsSyncing(false);
             };
 
-            const addLog = async (newLog) => {
-                const updatedLogs = [newLog, ...logs];
-                setLogs(updatedLogs);
-                localStorage.setItem('prs_sync_v2_combined', JSON.stringify(updatedLogs));
+            const addLog = async (log) => {
+                let updated;
+                if (editingLog) {
+                    updated = logs.map(l => l.id === log.id ? log : l);
+                    setEditingLog(null);
+                } else {
+                    updated = [log, ...logs];
+                }
                 
-                setStatus({ type: 'info', msg: 'Sincronizando com a Nuvem...' });
+                setLogs(updated);
+                localStorage.setItem('prs_sync_v4', JSON.stringify(updated));
+                setStatus({ type: 'info', msg: 'Sincronizando...' });
                 
                 try {
-                    await fetch(WEB_APP_URL, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        body: JSON.stringify(newLog)
-                    });
-                    setStatus({ type: 'success', msg: 'Treino Sincronizado!' });
-                    setTimeout(fetchCloudData, 1500);
-                } catch (e) {
-                    setStatus({ type: 'error', msg: 'Salvo apenas localmente.' });
-                }
+                    await fetch(WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(log) });
+                    setStatus({ type: 'success', msg: 'Sincronizado na Nuvem!' });
+                    setTimeout(fetchCloudData, 2000);
+                } catch (e) { setStatus({ type: 'error', msg: 'Salvo apenas no dispositivo.' }); }
+                setTimeout(() => setStatus(null), 3000);
+            };
+
+            const handleEditRequest = (log) => {
+                setEditingLog(log);
+                setActiveTab('log');
+            };
+
+            const handleImport = (importedLogs) => {
+                setLogs(importedLogs);
+                localStorage.setItem('prs_sync_v4', JSON.stringify(importedLogs));
+                setStatus({ type: 'success', msg: 'Backup Restaurado!' });
                 setTimeout(() => setStatus(null), 3000);
             };
 
             return (
                 <div className="min-h-screen pb-28 flex flex-col max-w-2xl mx-auto bg-white shadow-2xl relative">
-                    {/* Header */}
                     <header className="bg-slate-900 text-white p-5 flex justify-between items-center sticky top-0 z-50 rounded-b-[2.5rem] shadow-xl">
                         <div className="flex items-center space-x-3">
-                            <div className="bg-indigo-600 p-2 rounded-xl">
-                                <Trophy className="text-yellow-400 w-5 h-5" />
-                            </div>
+                            <div className="bg-indigo-600 p-2 rounded-xl"><Trophy className="text-yellow-400 w-5 h-5" /></div>
                             <div>
                                 <h1 className="text-lg font-black italic tracking-tighter uppercase">PR'S <span className="text-indigo-400">Sync+</span></h1>
-                                <p className="text-[9px] text-slate-400 font-bold tracking-[0.2em]">INTELIGÊNCIA & NUVEM</p>
+                                <p className="text-[9px] text-slate-400 font-bold tracking-widest leading-none">V4 LOCAL STORAGE</p>
                             </div>
                         </div>
-                        <button onClick={fetchCloudData} disabled={isSyncing} className="p-2 hover:bg-white/10 rounded-full transition">
+                        <button onClick={fetchCloudData} disabled={isSyncing} className="p-2 active:rotate-180 transition-transform duration-500">
                             <RefreshCw className={`w-6 h-6 ${isSyncing ? 'animate-spin text-indigo-400' : 'text-white'}`} />
                         </button>
                     </header>
 
-                    {/* Status Pop-up */}
                     {status && (
                         <div className={`fixed top-24 left-1/2 -translate-x-1/2 w-[90%] max-w-xs z-[60] p-4 rounded-2xl shadow-2xl flex items-center animate-fade ${status.type === 'error' ? 'bg-red-600' : 'bg-slate-800'} text-white`}>
-                            {status.type === 'error' ? <AlertTriangle className="w-5 h-5 mr-3 text-red-300"/> : <CheckCircle2 className="w-5 h-5 mr-3 text-indigo-400"/>}
-                            <span className="font-bold text-xs uppercase tracking-wider">{status.msg}</span>
+                            {status.type === 'error' ? <AlertTriangle className="w-4 h-4 mr-3"/> : <CheckCircle2 className="w-4 h-4 mr-3 text-indigo-400"/>}
+                            <span className="font-bold text-[10px] uppercase tracking-wider">{status.msg}</span>
                         </div>
                     )}
 
                     <main className="p-4 flex-grow">
-                        {activeTab === 'log' ? (
-                            <LogForm onAdd={addLog} />
-                        ) : (
-                            <Dashboard logs={logs} onSync={fetchCloudData} isSyncing={isSyncing} />
+                        {activeTab === 'metrics' && (
+                            <MetricsSection logs={logs} onEdit={handleEditRequest} />
+                        )}
+                        {activeTab === 'log' && (
+                            <LoggerSection 
+                                onAdd={addLog} 
+                                editingLog={editingLog} 
+                                onCancelEdit={() => {setEditingLog(null); setActiveTab('metrics');}} 
+                            />
+                        )}
+                        {activeTab === 'settings' && (
+                            <SettingsSection logs={logs} onImport={handleImport} />
                         )}
                     </main>
 
-                    {/* Navbar */}
-                    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-2xl bg-white/90 backdrop-blur-xl border-t border-slate-100 flex justify-around p-4 pb-8 z-50 rounded-t-[2.5rem] shadow-[0_-10px_25px_rgba(0,0,0,0.05)]">
+                    {/* Nav Bar Baseada na Imagem */}
+                    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-2xl bg-white/95 backdrop-blur-xl border-t border-slate-100 flex justify-around p-4 pb-8 z-50 rounded-t-[2.5rem] shadow-[0_-10px_25px_rgba(0,0,0,0.05)]">
                         <NavButton active={activeTab === 'metrics'} onClick={() => setActiveTab('metrics')} icon={BarChart2} label="Análise" />
+                        
                         <div className="relative -top-10">
-                            <button onClick={() => setActiveTab('log')} className="p-5 rounded-full bg-slate-900 text-white shadow-2xl shadow-indigo-200 active:scale-90 transition transform border-4 border-white">
+                            <button 
+                                onClick={() => {setEditingLog(null); setActiveTab('log');}} 
+                                className={`p-5 rounded-full ${activeTab === 'log' ? 'bg-indigo-600' : 'bg-slate-900'} text-white shadow-2xl active:scale-90 transition border-4 border-white`}
+                            >
                                 <Plus className="w-8 h-8" />
                             </button>
                         </div>
-                        <NavButton active={activeTab === 'log'} onClick={() => setActiveTab('log')} icon={Flame} label="Novo PR" />
+
+                        <NavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={Settings} label="Ajustes" />
                     </nav>
                 </div>
             );
         }
 
-        function LogForm({ onAdd }) {
+        // --- DASHBOARD (METRICS) ---
+        function MetricsSection({ logs, onEdit }) {
+            const stats = useMemo(() => {
+                const total = logs.length;
+                const weightPr = logs.reduce((max, l) => Math.max(max, l.weight || 0), 0);
+                
+                const heatmap = [];
+                const today = new Date();
+                for(let i=20; i>=0; i--) {
+                    const d = new Date(today.getTime() - (i * 86400000)).toISOString().split('T')[0];
+                    heatmap.push({ date: d, count: logs.filter(l => l.workoutDate === d).length });
+                }
+
+                return { total, weightPr, heatmap };
+            }, [logs]);
+
+            return (
+                <div className="animate-fade space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-indigo-600 p-6 rounded-[2rem] text-white shadow-lg">
+                            <p className="text-[10px] font-black opacity-60 uppercase tracking-widest mb-1">Total de Registros</p>
+                            <h4 className="text-4xl font-black">{stats.total}</h4>
+                        </div>
+                        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Carga Máxima</p>
+                            <h4 className="text-4xl font-black text-slate-800">{stats.weightPr}kg</h4>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center"><Flame className="w-4 h-4 mr-2 text-orange-500" /> Frequência</h3>
+                        <div className="flex justify-between gap-1">
+                            {stats.heatmap.map((d, i) => (
+                                <div key={i} className={`flex-1 aspect-square rounded-md ${d.count > 0 ? 'bg-indigo-500' : 'bg-slate-100'}`} title={d.date}></div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-[2.5rem] border border-slate-100 p-6 shadow-sm">
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center"><Clock className="w-4 h-4 mr-2" /> Histórico</h3>
+                        <div className="space-y-3">
+                            {logs.length === 0 ? (
+                                <p className="text-center text-slate-300 py-10 italic">Nenhum treino registrado.</p>
+                            ) : logs.slice(0, 15).map(log => (
+                                <div key={log.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <div className="flex-1">
+                                        <p className="font-black text-slate-800 text-xs uppercase tracking-tight">{log.exercise}</p>
+                                        <p className="text-[9px] text-slate-400 font-bold uppercase">{log.variation}</p>
+                                    </div>
+                                    <div className="flex items-center space-x-4">
+                                        <div className="text-right">
+                                            {isCardio(log.muscleGroup) ? (
+                                                <p className="font-black text-emerald-600 text-sm">{log.distance}km / {log.time}m</p>
+                                            ) : (
+                                                <p className="font-black text-indigo-600 text-sm">{log.weight}kg x {log.reps}</p>
+                                            )}
+                                            <p className="text-[8px] text-slate-300 font-bold uppercase">{new Date(log.workoutDate).toLocaleDateString('pt-BR')}</p>
+                                        </div>
+                                        <button onClick={() => onEdit(log)} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition">
+                                            <Pencil className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- LOGGER (REGISTRO) ---
+        function LoggerSection({ onAdd, editingLog, onCancelEdit }) {
             const [group, setGroup] = useState('Peitoral');
             const [exercise, setExercise] = useState('');
             const [variation, setVariation] = useState('');
             const [weight, setWeight] = useState('');
             const [reps, setReps] = useState('');
-            const [distance, setDistance] = useState('');
+            const [dist, setDist] = useState('');
             const [time, setTime] = useState('');
 
-            const exerciseList = useMemo(() => Object.keys(EXERCISE_CATALOG[group] || {}), [group]);
-            const variationList = useMemo(() => EXERCISE_CATALOG[group]?.[exercise] || [], [group, exercise]);
+            useEffect(() => {
+                if (editingLog) {
+                    setGroup(editingLog.muscleGroup);
+                    setExercise(editingLog.exercise);
+                    setVariation(editingLog.variation);
+                    setWeight(editingLog.weight || '');
+                    setReps(editingLog.reps || '');
+                    setDist(editingLog.distance || '');
+                    setTime(editingLog.time || '');
+                }
+            }, [editingLog]);
+
+            const exercises = useMemo(() => Object.keys(EXERCISE_CATALOG[group] || {}), [group]);
+            const variations = useMemo(() => EXERCISE_CATALOG[group]?.[exercise] || [], [group, exercise]);
 
             const handleSubmit = (e) => {
                 e.preventDefault();
                 if (!exercise || !variation) return;
-
-                const isCardioType = isCardio(group);
-
                 onAdd({
-                    id: Date.now(),
-                    workoutDate: getLocalTodayDate(),
-                    exercise,
-                    variation,
-                    muscleGroup: group,
-                    weight: isCardioType ? 0 : (parseFloat(weight) || 0),
-                    reps: isCardioType ? 0 : (parseInt(reps) || 0),
-                    distance: isCardioType ? (parseFloat(distance) || 0) : 0,
-                    time: isCardioType ? (parseInt(time) || 0) : 0
+                    id: editingLog ? editingLog.id : Date.now(),
+                    workoutDate: editingLog ? editingLog.workoutDate : getLocalTodayDate(),
+                    exercise, variation, muscleGroup: group,
+                    weight: parseFloat(weight) || 0,
+                    reps: parseInt(reps) || 0,
+                    distance: parseFloat(dist) || 0,
+                    time: parseInt(time) || 0
                 });
-
-                setWeight(''); setReps(''); setDistance(''); setTime('');
+                setWeight(''); setReps(''); setDist(''); setTime('');
             };
 
             return (
                 <div className="animate-fade space-y-6">
                     <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-200 shadow-inner">
-                        <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center uppercase tracking-tighter">
-                            <Plus className="w-5 h-5 mr-2 text-indigo-500" /> REGISTAR PERFORMANCE
-                        </h2>
-
-                        <form onSubmit={handleSubmit} className="space-y-5">
-                            <CustomSelect label="Grupo Muscular" value={group} onChange={(e) => { setGroup(e.target.value); setExercise(''); setVariation(''); }} options={Object.keys(EXERCISE_CATALOG)} />
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-black text-slate-800 flex items-center uppercase tracking-tighter">
+                                <Plus className="w-5 h-5 mr-2 text-indigo-500" /> 
+                                {editingLog ? "Editar Registro" : "Registrar Treino"}
+                            </h2>
+                            {editingLog && (
+                                <button onClick={onCancelEdit} className="p-2 text-slate-400 hover:text-red-500">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            )}
+                        </div>
+                        
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <CustomSelect label="Grupo" value={group} onChange={e => {setGroup(e.target.value); setExercise('');}} options={Object.keys(EXERCISE_CATALOG)} />
                             
                             <div className="grid grid-cols-2 gap-3">
-                                <CustomSelect label="Exercício" value={exercise} onChange={(e) => { setExercise(e.target.value); setVariation(''); }} options={exerciseList} />
-                                <CustomSelect label="Variação" value={variation} onChange={(e) => setVariation(e.target.value)} options={variationList} />
+                                <CustomSelect label="Exercício" value={exercise} onChange={e => setExercise(e.target.value)} options={exercises} />
+                                <CustomSelect label="Variação" value={variation} onChange={e => setVariation(e.target.value)} options={variations} />
                             </div>
 
                             {!isCardio(group) ? (
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div className="bg-white p-5 rounded-3xl border border-slate-200 flex flex-col items-center shadow-sm">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase mb-2">Carga (kg)</span>
-                                        <input type="number" placeholder="0" value={weight} onChange={e => setWeight(e.target.value)} className="text-4xl font-black text-indigo-600 text-center w-full outline-none bg-transparent" />
-                                    </div>
-                                    <div className="bg-white p-5 rounded-3xl border border-slate-200 flex flex-col items-center shadow-sm">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase mb-2">Repetições</span>
-                                        <input type="number" placeholder="0" value={reps} onChange={e => setReps(e.target.value)} className="text-4xl font-black text-slate-700 text-center w-full outline-none bg-transparent" />
-                                    </div>
+                                    <InputBox label="Carga (kg)" value={weight} onChange={setWeight} color="text-indigo-600" />
+                                    <InputBox label="Reps" value={reps} onChange={setReps} color="text-slate-700" />
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div className="bg-white p-5 rounded-3xl border border-slate-200 flex flex-col items-center shadow-sm">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase mb-2">Distância (km)</span>
-                                        <input type="number" step="0.1" placeholder="0" value={distance} onChange={e => setDistance(e.target.value)} className="text-4xl font-black text-emerald-600 text-center w-full outline-none bg-transparent" />
-                                    </div>
-                                    <div className="bg-white p-5 rounded-3xl border border-slate-200 flex flex-col items-center shadow-sm">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase mb-2">Tempo (min)</span>
-                                        <input type="number" placeholder="0" value={time} onChange={e => setTime(e.target.value)} className="text-4xl font-black text-slate-700 text-center w-full outline-none bg-transparent" />
-                                    </div>
+                                    <InputBox label="Dist (km)" value={dist} onChange={setDist} color="text-emerald-600" />
+                                    <InputBox label="Tempo (min)" value={time} onChange={setTime} color="text-slate-700" />
                                 </div>
                             )}
 
-                            <button type="submit" disabled={!variation} className="w-full bg-slate-900 text-white font-black py-6 rounded-[2rem] shadow-2xl shadow-indigo-100 active:scale-95 transition disabled:opacity-30 uppercase tracking-[0.2em] text-xs">
-                                Confirmar Série
+                            <button type="submit" disabled={!variation} className="w-full bg-slate-900 text-white font-black py-6 rounded-[2rem] shadow-2xl active:scale-95 transition disabled:opacity-30 uppercase tracking-[0.2em] text-xs">
+                                {editingLog ? "Salvar Alteração" : "Confirmar Registro"}
                             </button>
                         </form>
                     </div>
@@ -297,62 +399,97 @@
             );
         }
 
-        function Dashboard({ logs, onSync, isSyncing }) {
-            const stats = useMemo(() => {
-                const total = logs.length;
-                const weightPr = logs.reduce((max, log) => Math.max(max, log.weight || 0), 0);
-                return { total, weightPr };
-            }, [logs]);
+        // --- ABA DE CONFIGURAÇÕES (BACKUP JSON) ---
+        function SettingsSection({ logs, onImport }) {
+            const fileInputRef = useRef(null);
+
+            const exportData = () => {
+                const dataStr = JSON.stringify(logs, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `backup_treinos_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const importData = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const parsed = JSON.parse(event.target.result);
+                        if (Array.isArray(parsed)) {
+                            onImport(parsed);
+                        } else {
+                            alert("Arquivo JSON inválido.");
+                        }
+                    } catch (err) { alert("Erro ao ler arquivo."); }
+                };
+                reader.readAsText(file);
+            };
 
             return (
                 <div className="animate-fade space-y-6">
-                    {/* Hero Stats */}
-                    <div className="bg-indigo-600 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
-                        <Sparkles className="absolute -right-6 -top-6 w-32 h-32 opacity-10 rotate-12" />
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <p className="text-[10px] font-black opacity-60 uppercase tracking-[0.3em] mb-2">Registos Totais</p>
-                                <h3 className="text-6xl font-black tracking-tighter">{stats.total}</h3>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-[10px] font-black opacity-60 uppercase tracking-[0.3em] mb-2">Maior Carga</p>
-                                <h3 className="text-3xl font-black">{stats.weightPr} <span className="text-sm">kg</span></h3>
-                            </div>
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm text-center">
+                        <div className="bg-indigo-50 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                            <Database className="w-8 h-8 text-indigo-600" />
+                        </div>
+                        <h2 className="text-xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Gerenciar Dados</h2>
+                        <p className="text-xs text-slate-400 font-medium px-4 mb-8">
+                            Salve seus registros em um arquivo JSON ou recupere um backup antigo para não perder seu histórico.
+                        </p>
+
+                        <div className="grid grid-cols-1 gap-4">
+                            <button onClick={exportData} className="flex items-center justify-between p-5 bg-slate-50 border border-slate-100 rounded-3xl hover:bg-indigo-50 transition group">
+                                <div className="flex items-center">
+                                    <Download className="w-5 h-5 text-indigo-500 mr-4" />
+                                    <div className="text-left">
+                                        <p className="font-black text-slate-800 text-sm leading-none mb-1">Exportar JSON</p>
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase">Baixar Backup</p>
+                                    </div>
+                                </div>
+                            </button>
+
+                            <button onClick={() => fileInputRef.current.click()} className="flex items-center justify-between p-5 bg-slate-50 border border-slate-100 rounded-3xl hover:bg-emerald-50 transition">
+                                <div className="flex items-center">
+                                    <Upload className="w-5 h-5 text-emerald-500 mr-4" />
+                                    <div className="text-left">
+                                        <p className="font-black text-slate-800 text-sm leading-none mb-1">Restaurar JSON</p>
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase">Importar Arquivo</p>
+                                    </div>
+                                </div>
+                                <input type="file" ref={fileInputRef} onChange={importData} accept=".json" className="hidden" />
+                            </button>
                         </div>
                     </div>
+                </div>
+            );
+        }
 
-                    {/* Recents */}
-                    <div className="bg-white rounded-[2.5rem] border border-slate-100 p-6 shadow-sm">
-                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center">
-                            <Clock className="w-4 h-4 mr-2" /> Atividade Recente
-                        </h3>
-                        {logs.length === 0 ? (
-                            <div className="text-center py-12 text-slate-300 italic font-medium">Nenhum dado sincronizado.</div>
-                        ) : (
-                            <div className="space-y-4">
-                                {logs.slice(0, 10).map((log) => (
-                                    <div key={log.id} className="flex justify-between items-center p-5 bg-slate-50 rounded-3xl border border-slate-100 transition hover:border-indigo-200">
-                                        <div>
-                                            <p className="font-black text-slate-800 text-sm leading-none mb-1 uppercase tracking-tight">{log.exercise}</p>
-                                            <p className="text-[10px] text-slate-400 font-bold uppercase">{log.variation}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            {log.weight > 0 ? (
-                                                <>
-                                                    <p className="font-black text-indigo-600 text-xl leading-none">{log.weight}kg</p>
-                                                    <p className="text-[9px] text-slate-400 font-bold uppercase">{log.reps} reps</p>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <p className="font-black text-emerald-600 text-xl leading-none">{log.distance}km</p>
-                                                    <p className="text-[9px] text-slate-400 font-bold uppercase">{log.time} min</p>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+        // --- SUBCOMPONENTES ---
+        function InputBox({ label, value, onChange, color }) {
+            return (
+                <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center">
+                    <span className="text-[9px] font-black text-slate-400 uppercase mb-2">{label}</span>
+                    <input type="number" placeholder="0" value={value} onChange={e => onChange(e.target.value)} className={`text-4xl font-black ${color} text-center w-full outline-none bg-transparent`} />
+                </div>
+            );
+        }
+
+        function CustomSelect({ label, value, onChange, options }) {
+            return (
+                <div className="relative">
+                    <label className="text-[9px] font-black text-slate-400 uppercase mb-1 block ml-1">{label}</label>
+                    <div className="relative">
+                        <select value={value} onChange={onChange} className="w-full p-4 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 outline-none appearance-none transition text-xs">
+                            <option value="">Escolher...</option>
+                            {options.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
                     </div>
                 </div>
             );
